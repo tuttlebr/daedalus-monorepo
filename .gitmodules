@@ -1,0 +1,6 @@
+[submodule "submodules/daedalus-agent"]
+	path = submodules/daedalus-agent
+	url = https://github.com/tuttlebr/daedalus-agent.git
+[submodule "submodules/daedalus-switchyard"]
+	path = submodules/daedalus-switchyard
+	url = https://github.com/tuttlebr/daedalus-switchyard.git
