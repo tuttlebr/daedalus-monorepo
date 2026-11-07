@@ -1,0 +1,82 @@
+[
+  {
+    "id": "echo",
+    "split": "dev",
+    "prompt": "Repeat exactly COPPER and nothing else.",
+    "answer": "COPPER",
+    "allowed": [
+      "instant",
+      "low"
+    ]
+  },
+  {
+    "id": "arithmetic",
+    "split": "dev",
+    "prompt": "Calculate 17 * 23. Return only the integer.",
+    "answer": "391",
+    "allowed": [
+      "low",
+      "high"
+    ]
+  },
+  {
+    "id": "tool",
+    "split": "dev",
+    "prompt": "Call probe_value exactly once. Return its value verbatim, with no other text.",
+    "answer": "SYNTHETIC_73",
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "tool": true
+  },
+  {
+    "id": "ordering",
+    "split": "dev",
+    "prompt": "Jobs A, B, C have durations 3, 5, 2. B depends on A. C is independent. Two workers are available. What is the minimum makespan? Return only the integer.",
+    "answer": "8",
+    "allowed": [
+      "high"
+    ]
+  },
+  {
+    "id": "echo-holdout",
+    "split": "holdout",
+    "prompt": "Repeat exactly LANTERN and nothing else.",
+    "answer": "LANTERN",
+    "allowed": [
+      "instant",
+      "low"
+    ]
+  },
+  {
+    "id": "arithmetic-holdout",
+    "split": "holdout",
+    "prompt": "Calculate 29 * 13. Return only the integer.",
+    "answer": "377",
+    "allowed": [
+      "low",
+      "high"
+    ]
+  },
+  {
+    "id": "tool-holdout",
+    "split": "holdout",
+    "prompt": "Read probe_value once, then output its exact value with nothing added.",
+    "answer": "SYNTHETIC_91",
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "tool": true
+  },
+  {
+    "id": "ordering-holdout",
+    "split": "holdout",
+    "prompt": "Jobs A, B, C take 4, 7, 3 units. B requires A. C is independent. With two workers, what is the minimum total elapsed time? Return only the integer.",
+    "answer": "11",
+    "allowed": [
+      "high"
+    ]
+  }
+]

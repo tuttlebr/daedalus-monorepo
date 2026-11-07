@@ -1,0 +1,4 @@
+interface:
+  display_name: "Daedalus Co-design"
+  short_description: "Co-design agent and routing with runtime evidence"
+  default_prompt: "Use $daedalus-co-design to evolve the agent and Switchyard together, validate their shared contract, and learn from Kubernetes logs."

@@ -1,0 +1,3 @@
+# Private runtime evidence; only sanitized lessons belong in the shared skill.
+/.artifacts/daedalus-co-design/
+.DS_Store

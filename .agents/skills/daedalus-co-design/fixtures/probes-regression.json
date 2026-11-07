@@ -1,0 +1,80 @@
+[
+  {
+    "id": "extract",
+    "split": "dev",
+    "prompt": "From {\"amber\":19,\"violet\":42,\"teal\":8}, return only the integer value of violet.",
+    "answer": "42",
+    "allowed": [
+      "low"
+    ]
+  },
+  {
+    "id": "tool-relay",
+    "split": "dev",
+    "prompt": "Call probe_value exactly once. Copy its returned string exactly, with no other output.",
+    "answer": "CHECK_58",
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "tool": true
+  },
+  {
+    "id": "dependency",
+    "split": "dev",
+    "prompt": "Tasks A, B, C, D take 2, 6, 3, 4 seconds. B requires A. D requires C. With two identical workers, what is the earliest finish time for all tasks? Return only the integer.",
+    "answer": "8",
+    "allowed": [
+      "high"
+    ]
+  },
+  {
+    "id": "loop-semantics",
+    "split": "dev",
+    "prompt": "Execute this Python mentally: x=1; then for each n in [2,3,4], set x=x*n+1. Return only the final integer value of x.",
+    "answer": "41",
+    "allowed": [
+      "low",
+      "high"
+    ]
+  },
+  {
+    "id": "lookup",
+    "split": "holdout",
+    "prompt": "For the mapping {\"north\":26,\"south\":71,\"west\":14}, output only the value of south.",
+    "answer": "71",
+    "allowed": [
+      "low"
+    ]
+  },
+  {
+    "id": "tool-result",
+    "split": "holdout",
+    "prompt": "Read probe_value once and return precisely its string result. Add no explanation.",
+    "answer": "CHECK_84",
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "tool": true
+  },
+  {
+    "id": "parallel-chain",
+    "split": "holdout",
+    "prompt": "Two workers execute four tasks. P takes 5 seconds; Q takes 4 and follows P. R takes 3; S takes 8 and follows R. Tasks cannot be split. What is the minimum elapsed time to finish all tasks? Return only the integer.",
+    "answer": "11",
+    "allowed": [
+      "high"
+    ]
+  },
+  {
+    "id": "state-update",
+    "split": "holdout",
+    "prompt": "Start y=2. For n in [1,4,2], update y to 2*y+n. Return only the final integer y.",
+    "answer": "30",
+    "allowed": [
+      "low",
+      "high"
+    ]
+  }
+]
