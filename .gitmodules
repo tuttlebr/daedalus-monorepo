@@ -7,3 +7,6 @@
 [submodule "submodules/daedalus-sandbox"]
 	path = submodules/daedalus-sandbox
 	url = https://github.com/tuttlebr/daedalus-sandbox.git
+[submodule "submodules/daedalus-context"]
+	path = submodules/daedalus-context
+	url = https://github.com/tuttlebr/daedalus-context.git

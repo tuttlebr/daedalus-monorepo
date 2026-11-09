@@ -3,9 +3,9 @@
 Roots: `submodules/daedalus-agent` and `submodules/daedalus-sandbox`. Paths in
 the table are relative to those roots. Recheck current source and each owner's
 `AGENTS.md`; sandbox-local maintenance instructions apply when editing that repo.
-This reference covers the Bubblewrap execution/linting integration. The separate
-exploration service is not a substitute endpoint; inspect `exploration/` and the
-agent's `builder/runtime/src/exploration.rs` only when the task reaches that API.
+This reference covers Bubblewrap execution/linting and, when in scope, the
+separate exploration v2 service. A full-stack review includes both; an isolated
+v1 change need not broaden into v2. Neither service is a substitute endpoint.
 
 | Boundary | Agent source | Sandbox source | Compatibility check |
 | --- | --- | --- | --- |
@@ -72,3 +72,32 @@ agent's `builder/runtime/src/exploration.rs` only when the task reaches that API
   duration, timeout/truncation and persistence; responses expose `requestId`.
   Join those exact IDs where available. Do not equate them with the agent's
   model-call correlation IDs or infer joins from timestamp proximity.
+
+## Exploration v2 boundary
+
+- Agent `builder/runtime/src/exploration.rs` and
+  `builder/daedalus_runtime/exploration.py` consume the shared
+  `builder/runtime/resources/exploration.json` schema. Sandbox `exploration/`
+  owns the API, PostgreSQL metadata, snapshot storage and OpenShell controller.
+  Consult its `docs/exploration-api.md` and `docs/exploration-architecture.md`.
+- The agent signs short-lived grants from trusted user/conversation scope. The
+  service validates signature, audience, issuer, profile and scope; v1's shared
+  API key and workspace ID do not authorize v2. Switchyard receives tool schemas
+  and results but owns neither grants nor job execution.
+- Authenticated capability discovery advertises a static contract and does not
+  acquire the global metadata mutation lock or verify storage. Check `/readyz`
+  separately. Discovery must remain responsive while mutations/snapshot writes
+  hold that lock; success is not evidence of job admission or execution health.
+- V2 mutations use idempotency keys and generation checks. Retry an uncertain
+  service mutation with the same key and arguments; do not apply v1's blanket
+  no-replay rule to a keyed v2 request. Agent artifact publication is outside
+  that service ledger and requires separate integrity/publication handling.
+- Submission returns a run ID, not completion. Cancellation remains nonterminal
+  until runtime cleanup is confirmed. Recovery marks ambiguous started runs
+  LOST without replay; file checkpoints are not process checkpoints. Proposed
+  lessons remain scoped evidence and never change agent policy automatically.
+- Use `tests/exploration/test_contract.py` with a disposable PostgreSQL instance,
+  never production. Agent `builder/migration/exploration_http_check.py` exercises
+  built adapter registration, grants and publication against synthetic peers;
+  it does not prove OpenShell isolation or real controller cleanup. Verify the
+  built service and host runtime separately when affected and available.

@@ -1,4 +1,4 @@
 interface:
   display_name: "Daedalus Co-design"
-  short_description: "Co-design agent, routing, and sandbox contracts"
-  default_prompt: "Use $daedalus-co-design to evolve the agent, Switchyard, and sandbox together, validate affected shared contracts, and learn from Kubernetes logs."
+  short_description: "Co-design agent, routing, sandbox, and context contracts"
+  default_prompt: "Use $daedalus-co-design to evolve the agent, Switchyard, sandbox, and context information layer together, validate affected shared contracts, and learn from bounded Kubernetes evidence."

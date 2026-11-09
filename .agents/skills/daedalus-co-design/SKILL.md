@@ -1,14 +1,19 @@
 ---
 name: daedalus-co-design
-description: Co-design daedalus-agent, daedalus-switchyard, and daedalus-sandbox when changing model routing, provider transport, reasoning controls, shared tool/stream contracts, sandbox execution or linting integration, or end-to-end performance. Learn from Kubernetes logs in namespace daedalus on each relevant run. Excludes unrelated UI and isolated work without a shared-contract impact.
+description: Co-design daedalus-agent, daedalus-switchyard, daedalus-sandbox, and daedalus-context across model routing, provider transport, shared tool/stream contracts, sandbox execution, retrieval/ingestion and information-layer integration, or end-to-end performance. Learn from bounded Kubernetes evidence. Excludes unrelated UI and isolated work without a shared-contract impact.
 ---
 
 # Daedalus co-design
 
-Treat the agent, Switchyard, and sandbox as cooperating owners. Switchyard
+Treat the agent, Switchyard, sandbox, and context stack as cooperating owners. Switchyard
 is the agent's model-routing proxy; `submodules/daedalus-sandbox` owns the
 execution service and offline lint/type-check tooling called directly by the agent.
-Model calls pass through Switchyard; sandbox execution does not. Optimize a balance of task quality,
+`submodules/daedalus-context` owns the agent's information-layer stack: ingestion,
+retrieval, embeddings/reranking, and infrastructure MCP services. Hindsight is an
+externally owned integration, not code owned by the context submodule. The
+answering-model route uses Switchyard; agent calls to sandbox and context services do not.
+Include Switchyard when retrieved evidence changes model input or continuation.
+Optimize a balance of task quality,
 latency, and cost; routing confidence and HTTP success do not prove answer quality.
 The target task-classification levels are **max, high, low, instant**.
 `uncertain` remains a classifier fallback signal, not an additional task category.
@@ -32,15 +37,20 @@ there is no scheduled job or background learner.
 
 Read [the contract map](references/contract-map.md),
 [lessons and open questions](references/learning.md), applicable `AGENTS.md`
-files, and the current implementation at each affected boundary. Record all three
-submodule SHAs and dirty state. For execution, linting, workspace, or artifact
+files, and the current implementation at each affected boundary. Record all four
+submodule SHAs and dirty state. For a full-stack onboarding review, inventory
+each owner's APIs, generated consumer settings and deployment override precedence;
+check the generated settings against actual consumer keys, not just local schemas. For execution, linting, workspace, or artifact
 changes, read [the sandbox contract](references/sandbox-contract.md).
+For retrieval, ingestion, embedding/reranking, collection, memory-integration or
+context MCP changes, read [the information-layer contract](references/context-contract.md).
 Distinguish source defaults, environment overrides, rendered
 configuration, and running images; none proves the others.
 
 Before implementation, state the intended behavior and impact on each affected owner.
 Assess agent and Switchyard for model-path changes, and agent and sandbox for
-execution/verification changes; include the third owner when the seam reaches it.
+execution/verification changes. Assess agent and context for information-layer
+changes; include other owners only where the affected path reaches them.
 A concise table can cover contract, owner responsibilities,
 compatibility/migration, and validation.
 
@@ -60,6 +70,9 @@ affected seams:
   retries, cancellation and fallback ownership.
 - Sandbox readiness/capability discovery, command policy, verification wrappers,
   file staging/collection, workspace lifetime, and artifact publication.
+- Information source -> extraction/chunking -> document embeddings -> collection
+  generation/alias -> query embeddings/search/reranking -> cited tool results ->
+  model continuation; include freshness, access scope and degradation behavior.
 
 Trace a representative request through the whole path. Preserve explicit user
 choices. Assign each decision to its owning layer; avoid compensating policies
@@ -78,6 +91,11 @@ Include agent, gateway and the decision service for routing issues, plus stream
 workers/autonomous requests when they participate in the affected path. For
 execution/linting issues, include sandbox containers when present in this namespace;
 record external or absent sandbox coverage as a gap, not successful verification.
+For context issues, select the affected ingestion, storage, retriever or MCP
+workloads from current topology and pod discovery, plus their agent consumers.
+Follow the context repository's environment/context guard before cluster access;
+record missing prerequisites as collection gaps. Do not fetch corpus content,
+memory records or credentials just to improve observability.
 
 Join agent runs and gateway decisions by observed request/trace identifiers.
 Timestamp proximity alone is a hypothesis. Separate user traffic, probes, and
@@ -100,6 +118,11 @@ Check combined retry bounds and avoid repeating executed tool side effects.
 For sandbox changes, exercise discovery -> staging -> execution/check -> result
 handling with passing and failing synthetic inputs, including affected timeout,
 policy, isolation, workspace, and publication cases from the sandbox contract.
+For context changes, exercise a synthetic source/query through the affected
+ingestion or retrieval boundary and agent result handling. Verify embedding-space
+compatibility, collection/freshness state, metadata/citations, authorization and
+degradation as applicable. Distinguish provider readiness, dependency/data health
+and actual consumer results; none substitutes for the others.
 Count skipped binary/image checks as unverified.
 
 For optimization, compare baseline and candidate on matched synthetic tasks,
@@ -110,6 +133,8 @@ and cost per successful task where measured. Include failures and sample counts;
 unknown usage/pricing means unknown cost. Do not promote on latency alone or
 silently reduce quality to claim balance. Ask about material tradeoffs when
 evidence does not establish a clear improvement.
+For retrieval comparisons, also pin corpus/collection generation and embedding
+revision, and measure relevant/correct evidence and citations, not only search latency.
 
 Existing task authorization governs live probes, deployment, publishing and Git
 operations. Log access and skill improvement do not grant deployment rights.

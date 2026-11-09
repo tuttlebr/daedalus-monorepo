@@ -3,10 +3,18 @@
 `submodules/daedalus-agent` and `submodules/daedalus-switchyard` form one model
 request path. The agent calls `submodules/daedalus-sandbox` directly for code
 execution and offline linting/verification. For routing, reasoning controls,
-provider transport, shared tool or stream contracts, sandbox integration, and
+provider transport, shared tool or stream contracts, sandbox integration,
+context ingestion/retrieval and information-layer integration, and
 end-to-end optimization, use
 [daedalus-co-design](.agents/skills/daedalus-co-design/SKILL.md). Assess affected
 owners and consumers before changing a shared contract, even if only one needs an edit.
+
+`submodules/daedalus-context` provides the agent's information layer: document
+ingestion, vector retrieval, embeddings/reranking, and infrastructure MCP services.
+Its Hindsight integration is externally owned. Context-service calls go directly
+from the agent; Switchyard owns the model continuation using their results.
+Assess the relevant paths across all four repositories without broadening an
+isolated task into a full-stack audit.
 
 The target task-classification levels are `max`, `high`, `low`, and `instant`.
 Discover Switchyard provider configurations through `routes_*.toml`; require an

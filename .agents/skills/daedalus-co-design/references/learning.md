@@ -3,6 +3,31 @@
 Keep current reusable knowledge, not a run transcript. Follow
 [the evidence workflow](runtime-evidence.md) when revising entries.
 
+## L011: the context stack exposes several consumer contracts, not one context API
+
+- **Status:** verified source ownership and consumer configuration during initial
+  skill onboarding; runtime was not verified. L012 adds the subsequent
+  cross-consumer regression and fixes a generated-ingestion-settings omission.
+- **Evidence:** context `ef90bcd2ec28ef12673bb887f200f0ed9724b823` and agent
+  `1764e085c116e8cd618c1e6989416cad65d2a80c`. Context topology separates storage,
+  embedding/reranking, ingestion and infrastructure MCP services; Hindsight is
+  an external owner. `contextctl.agent_env` generates retrieval and MCP settings
+  consumed by the agent workflow. Both checked-in environment contracts validate.
+- **Action:** assess the affected service and agent consumer, distinguish
+  embedding-space compatibility from dimension equality, and validate evidence
+  metadata/freshness through retrieval. Keep provider, dependency/data and
+  consumer health separate. Consult [context-contract.md](context-contract.md)
+  for source ownership and checks; do not route context calls through Switchyard
+  merely because model continuations use it.
+- **Verification:** local contract validation and generated-key/consumer checks;
+  collector regression covers fourth-repository provenance, contract hashes,
+  selected context logs and exclusion of private environment content.
+- **Limit:** source/schema checks do not establish deployed model or corpus
+  state, retrieval quality, full-path performance or external Hindsight health.
+  Runtime coverage requires the context owner's environment/context prerequisites.
+- **Recheck:** topology/ownership, consumer environment generation, embedding
+  space, collection aliases, endpoint shapes or health/permission semantics change.
+
 ## L001: source aliases are not effective runtime aliases
 
 - **Status:** historical source-contract discrepancy; removed from current agent
@@ -68,7 +93,8 @@ Keep current reusable knowledge, not a run transcript. Follow
 
 ## L004: selectable route variants need independent classifier consistency checks
 
-- **Status:** verified source inconsistency; live impact unverified.
+- **Status:** historical source inconsistency, reconciled by the variant checks
+  in L010; historical live impact unverified.
 - **Evidence:** at gateway `7250faaba434f18153ed2dd6c832156823087a1b`, parsed
   `routes_openai.toml` contains only the OpenAI client, while its classifier
   instructions say all answering profiles use Fireworks/DeepSeek. Its `instant`
@@ -266,3 +292,95 @@ Keep current reusable knowledge, not a run transcript. Follow
   task quality, latency or cost; rollout and matched trials remain separate.
 - **Recheck:** provider onboarding, user contract changes, route inventory,
   classifier choices, consumers, loaded configuration or wire defaults change.
+
+## L012: generated service settings must match consumer keys and precedence
+
+- **Status:** verified source integration defect with synthetic regression.
+- **Evidence:** context `ef90bcd`, agent `1764e08`, reviewed 2026-11-09.
+  Context generated only `NV_INGEST_ENDPOINT`; Rust/Python ingestion and workflow
+  YAML consume `NV_INGEST_HOST` and `NV_INGEST_PORT`. Local context schema
+  validation passed despite this omission. The generator now emits both forms.
+- **Verification:** context's changed-topology test fails on the old generator;
+  parent `scripts/test_context_boundary.py` resolves the actual agent workflow
+  from both generated environments, including ingestion, embedding, retrieval
+  and reranking settings. Synthetic HTTP probe tests also verify both native
+  role-aware messages and NIM input/input_type without a duplicated query prefix,
+  and reject invalid vectors even when dimensions match.
+- **Action:** validate generated keys against real consumers. Reconcile agent
+  Helm `retrieval.*` values separately: enabled retrieval filters duplicate
+  Milvus/readiness keys from generic backend environment overrides. Separate
+  provider reachability/protocol probes from actual agent retrieval and citations.
+- **Limit:** no live corpus, embedding revision, full ingestion/retrieval
+  continuation or deployed configuration acceptance was established. Context
+  cluster collection lacked its required local environment file.
+- **Recheck:** generator, agent settings, Helm precedence, role templates,
+  embedding space or collection contracts change.
+
+## L013: exploration discovery must not wait behind durable mutations
+
+- **Status:** verified implementation and authenticated HTTP regression.
+- **Evidence:** sandbox `cc072ea`, agent `1764e08`, reviewed 2026-11-09.
+  Static v2 capabilities previously entered the same PostgreSQL mutation lock
+  as snapshot operations. Discovery now validates auth/arguments then returns
+  the static contract without acquiring storage or the mutation lock.
+- **Verification:** real FastAPI GET/POST handlers with signed synthetic grants
+  pass with storage unavailable; invalid grants/arguments still fail and
+  readiness remains unavailable. All 16 exploration contracts pass against
+  disposable PostgreSQL, including concurrent keyed submission and scope checks.
+- **Action:** distinguish static discovery, dependency readiness, job completion
+  and runtime cleanup. Preserve v1's no-blind-replay execution contract while
+  retaining v2 same-key/same-arguments retries for ledger-backed mutations.
+- **Limit:** no measured production latency gain, real OpenShell/Bubblewrap
+  execution or built agent-to-service path in this run. The fix removes a
+  lock/storage dependency, not a demonstrated end-to-end performance bottleneck.
+- **Recheck:** advertised capabilities become storage-dependent, grants/schema,
+  mutation locking, idempotency ledger or controller recovery changes.
+
+## L014: transport-specific defaults need separate wire regressions
+
+- **Status:** verified built synthetic gateway behavior; no provider defect found.
+- **Evidence:** Switchyard `a13884c` routes and the retained built gateway were
+  exercised on 2026-11-09. Unlike the documented Chat streaming-default issue,
+  native Responses targets with `stream = true` preserved caller `stream = false`.
+- **Verification:** `tests/test_responses_transport.py` covers six native aliases,
+  both stream modes and default/caller effort overrides (24 subcases), preserving
+  tool call/result IDs. All three route variants also pass built configuration
+  validation. Agent/gateway Chat boundary fixtures pass for both Chat variants.
+- **Action:** keep transport-specific regressions. Do not copy a Chat workaround
+  into native Responses merely because source defaults look similar.
+- **Limit:** synthetic provider acceptance does not prove real-provider support,
+  full agent-to-native-Responses continuation, quality, latency or cost. Retained
+  binary/source provenance was not rebuilt independently during this review.
+- **Recheck:** provider adapter, merge/stream encoding, pinned gateway build,
+  public aliases or route payload defaults change.
+
+## L015: deploying current source requires build-to-workload image identity
+
+- **Status:** verified source orchestration and synthetic public-entrypoint tests.
+- **Evidence:** deployment alignment on 2026-11-09 based on agent `90fdaad4`,
+  Switchyard `6088c2f`, context `4b9e7bf` and sandbox `ba97474`. Agent already
+  built/published and deployed immutable references. Switchyard, context and
+  sandbox v2 reused published images; sandbox v1 already built/pushed through its
+  deployment script, but sandbox had no root Make target. All four now expose
+  `make deploy` for current-checkout deployment while retaining durable assets.
+- **Verification:** synthetic clients exercise public Make entrypoints, explicit
+  settings/component selection, preflight/build/push failures and exact image
+  references reaching Helm. Switchyard and sandbox deploy fresh digests; context
+  passes unique versioned tags to selected owned components. Builds target the
+  configured deployment architecture rather than assuming the host architecture.
+  Chart checks retain existing PVC/resource wiring; no teardown path was added.
+- **Action:** keep prebuilt/restart operations explicit, preserve saved provider
+  selection, and verify newly published image identity at the workload boundary.
+  Upstream images and external Hindsight retain their owners. Ordinary source
+  review does not authorize running the deployment or publishing images.
+- **Related regression:** sandbox's controller now launches the image recorded
+  by the persisted run/session, not its newly deployed global default. Retain
+  referenced registry digests while sessions can still run; deployment must not
+  silently change their execution provenance. Pod-local v1 files remain ephemeral.
+- **Limit:** no live registry publication, rollout, GPU/runtime execution or
+  storage-recovery claim. Context's broader local build gate remains blocked
+  by missing Docker CLI in the validation container; focused deployment and
+  chart gates passed. Keep release names/namespaces/storage settings stable;
+  storage migration is separate from redeployment.
+- **Recheck:** image build mappings/platforms, Make/env precedence, rollout or
+  recovery commands, PVC templates, session image identity or owner boundaries.

@@ -15,10 +15,27 @@ Defaults cover backend, gateway, decision service, autonomous agent and stream
 workers. Repeated `--pod-prefix` arguments replace that scope when needed.
 See `--help` for bounds.
 
-Source provenance includes agent, Switchyard and sandbox revisions/dirty state;
+Source provenance includes agent, Switchyard, sandbox and context revisions/dirty state;
 sandbox server, verification launcher/install code, Dockerfile and chart defaults
 are hashed alongside agent/gateway configuration. These are source fingerprints,
-not proof of a deployed rootfs or effective allowlist.
+not proof of a deployed rootfs or effective allowlist. Context topology, collection,
+embedding and component-lock contracts, environment policies, schemas and root
+orchestration sources are hashed too. Private `.env` files, corpus contents and
+generated credential material are not source-fingerprint inputs.
+
+For information-layer issues, read [context-contract.md](context-contract.md)
+and the context repository's `AGENTS.md`. Before context cluster access, source
+its root `.env` with export enabled and set an approved literal `EXPECTED_CONTEXT`;
+still pass the selected context explicitly to the collector. Do not derive it
+from the active context or print environment values. If the required file/access
+is absent, record the collection blocker and continue local contract work.
+Use `stack/topology.yaml` and actual pod discovery to select relevant storage,
+retriever, ingestion or infrastructure MCP containers. Include the agent consumer
+and use repeated `--pod-prefix` arguments for the selected scope; explicit prefixes
+replace defaults. The repository name is not a pod prefix. Hindsight remains an
+external owner; missing service/log coverage is a gap. Do not collect whole
+corpora, query bodies or memory contents. Distinguish job/generation/collection
+identifiers from MCP sessions and model-call IDs before attempting a join.
 
 For execution/linting issues, discover sandbox pod names in namespace `daedalus`
 and include their observed prefix with `--pod-prefix`. Repeat all prefixes needed

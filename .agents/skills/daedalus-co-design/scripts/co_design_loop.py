@@ -1077,11 +1077,11 @@ def main():
         "deployed": False,
     }
     # Key path/value intentionally absent from report and child environments.
-    from capture_runtime import source_state
+    from capture_runtime import SOURCE_REPOS, source_state
 
     report["revisions"] = {
         name: source_state(ROOT / name)
-        for name in (".", "submodules/daedalus-agent", "submodules/daedalus-switchyard")
+        for name in SOURCE_REPOS
     }
     if args.gateway_binary:
         report["gateway_binary_sha256"] = digest(Path(args.gateway_binary).read_bytes())

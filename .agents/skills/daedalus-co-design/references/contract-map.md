@@ -7,6 +7,10 @@ The model path is agent -> Switchyard -> provider. The execution/verification
 path is agent -> sandbox -> agent tool result -> model continuation. For the
 agent/sandbox ownership map, source paths, and focused validation, read
 [sandbox-contract.md](sandbox-contract.md) when that boundary is affected.
+The information path is context ingestion/storage/retriever services -> agent
+retrieval or MCP tool result -> model continuation through Switchyard. Read
+[context-contract.md](context-contract.md) for its ownership, source paths and
+validation. Hindsight is an external integration, not a fifth owned submodule.
 
 | Concern | Agent: `submodules/daedalus-agent` | Gateway: `submodules/daedalus-switchyard` | Joint check |
 | --- | --- | --- | --- |
@@ -48,6 +52,29 @@ agent/sandbox ownership map, source paths, and focused validation, read
 - Selected TOML can differ from the chart example. Classifier prose/comments can
   lag executable fields; reconcile them when changing policy.
 
+The agent architecture guide must describe standalone classification on every
+model continuation. A stable session header is not evidence of sticky routing;
+legacy Composite patches and frozen investigations do not define current routes.
+For initial onboarding, compare generated environment output to real consumer
+keys and Helm precedence, then verify the relevant protocol through the consumer.
+
+## Deployment entrypoint contract
+
+Each application exposes `make deploy` for current-checkout image publication
+and in-place Kubernetes reconciliation, following the agent's existing pattern.
+Respect component selection and saved local settings; Switchyard's explicit
+provider choice may be persisted as `ROUTES_FILE` in `.env`. Do not choose a
+provider implicitly. Validate settings before writes, pass freshly published
+image references through to the workload, and preserve existing namespaces,
+releases, PVCs, data and scoped credentials. Reconciliation of pinned upstream
+images is distinct from building repository-owned code.
+
+Test the public Make entrypoint with synthetic command peers, including settings
+precedence, build/push failures, image freshness and absence of teardown commands.
+A passing mock orchestration test does not prove a successful live rollout or
+storage recovery. Inspect each owner's deployment instructions before invocation;
+source-change authorization alone is not an instruction to execute deployment.
+
 ## Validation entry points
 
 Read owning instructions, Makefiles and CLI options first. Choose focused checks
@@ -60,8 +87,9 @@ and the owning repository's required gates.
 - Switchyard: `python3 -m unittest discover -s tests -v` from its root.
   `tests/test_provider_routes.py` discovers every provider file and checks the
   four-category contract and resolving aliases/targets. Use Python 3.11+ for `tomllib` (for example `uv run --python 3.12 --no-project python`).
-  HTTP regressions in `tests/test_decision_api.py` and
-  `tests/test_fireworks_chat_transport.py` need built artifacts; inspect
+  HTTP regressions in `tests/test_decision_api.py`,
+  `tests/test_fireworks_chat_transport.py` and `tests/test_responses_transport.py`
+  need built artifacts; inspect
   `SWITCHYARD_TEST_BINARY` handling and report skips. `make validate` renders/lints
   selected routes/chart and may require header environment values; avoid exposing
   rendered values in public output.
@@ -82,6 +110,10 @@ and the owning repository's required gates.
   upstream retry, malformed tool rejection and retired profiles.
   It does not validate real provider capabilities, latency, or task quality.
 
+- Parent `scripts/test_context_boundary.py` resolves generated context settings
+  against the real agent workflow under changed synthetic topology for both
+  environments. Run with Python 3.12, PyYAML and jsonschema. This configuration
+  regression does not substitute for ingestion/retrieval through the built agent.
 - Parent `scripts/co_design_loop.py` and `scripts/test_co_design_loop.py` implement
   bounded recursive live policy trials, secure application probes, exact-ID
   log joins and deterministic quality/holdout gates. See `recursive-loop.md`.

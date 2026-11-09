@@ -20,6 +20,13 @@ to improve the system.
 
 ## Secure API key
 
+Source provenance includes all four submodules. The executable proposal space
+remains classifier-only: it does not tune embedding models, rerankers, collection
+generations, ingestion policies or sandbox behavior. For information-layer
+comparisons, use the [context contract](context-contract.md) and separately pin
+corpus generation, embedding revision and consumer configuration; model-route
+trials alone do not establish retrieval quality.
+
 Create a dedicated Daedalus API key and store it outside Git in a mode-0600 file,
 for example `~/.config/daedalus/probe-api-key`. Pass **only its path** with
 `--api-key-file`. The runner rejects group/world-readable files, reads the token

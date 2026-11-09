@@ -111,6 +111,28 @@ class CaptureTest(unittest.TestCase):
                              hashlib.sha256(path.read_bytes()).hexdigest())
             self.assertTrue(any("logs" in c and "llm-sandbox-a" in c for c in calls))
 
+    def test_context_provenance_hashes_contracts_without_loading_secrets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            context = root / "submodules/daedalus-context"
+            contract = context / "stack/rag-schema.yaml"
+            contract.parent.mkdir(parents=True)
+            contract.write_bytes(b"embedding: synthetic-fixture\n")
+            (context / ".env").write_text("PRIVATE=must-not-persist\n")
+            code, directory, manifest, calls = self.run_capture(
+                root, [pod("switchyard-a"), pod("nemotron-retriever-a"), pod("unselected-context-a")],
+                extra=("--pod-prefix", "nemotron-retriever-"))
+            self.assertEqual(code, 0)
+            self.assertEqual(manifest["source"]["submodules/daedalus-context"],
+                             {"head": "fixture-sha", "status": ""})
+            self.assertEqual(manifest["source_sha256"][str(contract.relative_to(root))],
+                             hashlib.sha256(contract.read_bytes()).hexdigest())
+            self.assertNotIn(str((context / ".env").relative_to(root)), manifest["source_sha256"])
+            self.assertTrue(any("logs" in c and "nemotron-retriever-a" in c for c in calls))
+            self.assertFalse(any("logs" in c and "unselected-context-a" in c for c in calls))
+            for file in directory.iterdir():
+                self.assertNotIn("must-not-persist", file.read_text())
+
     def test_bounds_and_missing_scope_are_not_passes(self):
         for pods, extra, expected in (
             ([], (), "No matching pods"),

@@ -13,6 +13,10 @@ import time
 
 
 ROOT = Path(__file__).resolve().parents[4]
+SOURCE_REPOS = (
+    ".", "submodules/daedalus-agent", "submodules/daedalus-switchyard",
+    "submodules/daedalus-sandbox", "submodules/daedalus-context",
+)
 DEFAULT_PREFIXES = (
     "daedalus-backend-", "switchyard-", "decision-api-",
     "daedalus-autonomous-agent-", "daedalus-frontend-stream-worker-",
@@ -114,8 +118,7 @@ def main():
         "raw_sensitive_logs": True,
         "coverage": "Bounded tails; timestamps cover request execution, not an atomic snapshot.",
     }
-    for name in (".", "submodules/daedalus-agent", "submodules/daedalus-switchyard",
-                 "submodules/daedalus-sandbox"):
+    for name in SOURCE_REPOS:
         manifest["source"][name] = source_state(ROOT / name)
         if any(value is None for value in manifest["source"][name].values()):
             manifest["gaps"].append(f"Source provenance unavailable: {name}")
@@ -124,6 +127,13 @@ def main():
     files.extend(ROOT / "submodules/daedalus-sandbox" / name for name in (
         "sandbox_server.py", "tooling/verify.py", "tooling/install.py", "Dockerfile",
         "charts/llm-sandbox/values.yaml",
+    ))
+    context_root = ROOT / "submodules/daedalus-context"
+    for pattern in ("stack/*.yaml", "stack/environments/*.yaml", "stack/schemas/*.json"):
+        files.extend(sorted(context_root.glob(pattern)))
+    files.extend(context_root / name for name in (
+        "Makefile", "docker-compose.yaml", "scripts/contextctl.py",
+        "scripts/render_refresh_contract.py",
     ))
     for path in files:
         if path.is_file():
