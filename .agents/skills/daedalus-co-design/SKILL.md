@@ -1,17 +1,24 @@
 ---
 name: daedalus-co-design
-description: Co-design daedalus-agent and daedalus-switchyard in this monorepo when changing model routing, provider transport, reasoning controls, tool/stream contracts, or their end-to-end performance. Learn from Kubernetes logs in namespace daedalus on each relevant run. Excludes unrelated UI and isolated tool work without a routing or shared-contract impact.
+description: Co-design daedalus-agent, daedalus-switchyard, and daedalus-sandbox when changing model routing, provider transport, reasoning controls, shared tool/stream contracts, sandbox execution or linting integration, or end-to-end performance. Learn from Kubernetes logs in namespace daedalus on each relevant run. Excludes unrelated UI and isolated work without a shared-contract impact.
 ---
 
 # Daedalus co-design
 
-Treat the agent and Switchyard as one request path with two owners. Switchyard
-is the model-routing proxy used by the agent. Optimize a balance of task quality,
+Treat the agent, Switchyard, and sandbox as cooperating owners. Switchyard
+is the agent's model-routing proxy; `submodules/daedalus-sandbox` owns the
+execution service and offline lint/type-check tooling called directly by the agent.
+Model calls pass through Switchyard; sandbox execution does not. Optimize a balance of task quality,
 latency, and cost; routing confidence and HTTP success do not prove answer quality.
-The task-classification levels are **max, xhigh, high, medium, low, instant**.
-They are separate from configured passthrough profiles: custom DeepSeek exposes
-only **max, high, low, instant**, its four distinct provider settings. The generic
-agent schema and other provider configurations may support additional levels.
+The target task-classification levels are **max, high, low, instant**.
+`uncertain` remains a classifier fallback signal, not an additional task category.
+They are separate from provider-native reasoning settings and explicit passthrough
+aliases. The generic agent schema and a provider's explicit aliases may support
+additional levels without adding classifier categories. Discover all current
+`routes_*.toml` files in Switchyard; do not hard-code a provider inventory or infer
+the selected provider from filenames or glob order. Require explicit route
+selection for probes and deployment; inspect each file's clients, targets,
+classifier choices, fallback and public aliases as new providers are onboarded.
 `none` is retired as a public effort option. `daedalus` is the automatic model
 route, not another effort level. Verify provider support and translations; public
 profile names and provider-native reasoning values are separate contracts. Do not
@@ -25,13 +32,25 @@ there is no scheduled job or background learner.
 
 Read [the contract map](references/contract-map.md),
 [lessons and open questions](references/learning.md), applicable `AGENTS.md`
-files, and the current implementation on both sides. Record both submodule SHAs
-and dirty state. Distinguish source defaults, environment overrides, rendered
+files, and the current implementation at each affected boundary. Record all three
+submodule SHAs and dirty state. For execution, linting, workspace, or artifact
+changes, read [the sandbox contract](references/sandbox-contract.md).
+Distinguish source defaults, environment overrides, rendered
 configuration, and running images; none proves the others.
 
-Before implementation, state the intended behavior and impact on **both** owners.
-A concise table can cover contract, agent responsibility, Switchyard responsibility,
-compatibility/migration, and validation. Include the affected seams:
+Before implementation, state the intended behavior and impact on each affected owner.
+Assess agent and Switchyard for model-path changes, and agent and sandbox for
+execution/verification changes; include the third owner when the seam reaches it.
+A concise table can cover contract, owner responsibilities,
+compatibility/migration, and validation.
+
+Treat explicit user corrections as the current target contract. Reconcile source,
+tests, helpers, documentation and these lessons with that contract within the
+authorized task; do not preserve outdated guidance as a requirement or stop at
+reporting drift when alignment is requested. Check every discovered provider
+variant, while preserving intentional provider differences and explicit caller
+choices. Frozen evidence records what happened, not what should be restored. Include the
+affected seams:
 
 - Agent intent/profile and skill selection -> public model alias -> route ->
   classifier choice -> provider model and actual reasoning parameters.
@@ -39,11 +58,13 @@ compatibility/migration, and validation. Include the affected seams:
   call/result IDs, continuation history, context limits and usage reporting.
 - Request/trace correlation, user/conversation isolation, affinity, deadlines,
   retries, cancellation and fallback ownership.
+- Sandbox readiness/capability discovery, command policy, verification wrappers,
+  file staging/collection, workspace lifetime, and artifact publication.
 
 Trace a representative request through the whole path. Preserve explicit user
 choices. Assign each decision to its owning layer; avoid compensating policies
-in both layers. A change may edit only one submodule, but must assess the other
-and establish compatibility. Implement both sides when necessary within the task,
+across layers. A change may edit only one submodule, but must assess its consumers
+and establish compatibility. Implement affected sides when necessary within the task,
 including rollout order and compatibility during mixed versions. Skill-authoring
 or review-only requests do not authorize application changes.
 
@@ -53,8 +74,10 @@ On every relevant run, attempt a bounded read-only capture using
 [the evidence workflow](references/runtime-evidence.md). Use `kubectl` against
 the explicitly selected context and namespace `daedalus`; kubelet is not the
 log-query CLI. Discover pods/containers rather than pinning ephemeral names.
-Include both services and the decision service for routing issues, plus stream
-workers/autonomous requests when they participate in the affected path.
+Include agent, gateway and the decision service for routing issues, plus stream
+workers/autonomous requests when they participate in the affected path. For
+execution/linting issues, include sandbox containers when present in this namespace;
+record external or absent sandbox coverage as a gap, not successful verification.
 
 Join agent runs and gateway decisions by observed request/trace identifiers.
 Timestamp proximity alone is a hypothesis. Separate user traffic, probes, and
@@ -74,6 +97,9 @@ the boundary, not only each repository's mocks. For routing/transport changes,
 cover automatic and affected explicit routes, a tool continuation, and relevant
 classifier timeout, malformed stream, upstream failure or cancellation paths.
 Check combined retry bounds and avoid repeating executed tool side effects.
+For sandbox changes, exercise discovery -> staging -> execution/check -> result
+handling with passing and failing synthetic inputs, including affected timeout,
+policy, isolation, workspace, and publication cases from the sandbox contract.
 Count skipped binary/image checks as unverified.
 
 For optimization, compare baseline and candidate on matched synthetic tasks,

@@ -114,12 +114,17 @@ def main():
         "raw_sensitive_logs": True,
         "coverage": "Bounded tails; timestamps cover request execution, not an atomic snapshot.",
     }
-    for name in (".", "submodules/daedalus-agent", "submodules/daedalus-switchyard"):
+    for name in (".", "submodules/daedalus-agent", "submodules/daedalus-switchyard",
+                 "submodules/daedalus-sandbox"):
         manifest["source"][name] = source_state(ROOT / name)
         if any(value is None for value in manifest["source"][name].values()):
             manifest["gaps"].append(f"Source provenance unavailable: {name}")
     files = [ROOT / "submodules/daedalus-agent/backend/tool-calling-config.yaml"]
     files.extend(sorted((ROOT / "submodules/daedalus-switchyard").glob("routes_*.toml")))
+    files.extend(ROOT / "submodules/daedalus-sandbox" / name for name in (
+        "sandbox_server.py", "tooling/verify.py", "tooling/install.py", "Dockerfile",
+        "charts/llm-sandbox/values.yaml",
+    ))
     for path in files:
         if path.is_file():
             manifest["source_sha256"][str(path.relative_to(ROOT))] = hashlib.sha256(path.read_bytes()).hexdigest()

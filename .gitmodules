@@ -4,3 +4,6 @@
 [submodule "submodules/daedalus-switchyard"]
 	path = submodules/daedalus-switchyard
 	url = https://github.com/tuttlebr/daedalus-switchyard.git
+[submodule "submodules/daedalus-sandbox"]
+	path = submodules/daedalus-sandbox
+	url = https://github.com/tuttlebr/daedalus-sandbox.git

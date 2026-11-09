@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Exercise built agent -> gateway -> synthetic judge/provider, without live traffic.
 
-Run with Python 3.11+, --agent-binary and --gateway-binary. Both binaries must run
-on the same host. Uses the checked-out custom routes with loopback endpoints.
+Run with Python 3.11+, --agent-binary, --gateway-binary and --routes. Both binaries
+must run on the same host. Supports Chat provider routes with loopback endpoints.
 No credentials, private prompts, Redis, or Kubernetes access are required.
 """
 
@@ -21,9 +21,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
-
-ROOT = Path(__file__).resolve().parents[4]
-
 
 def port():
     with socket.socket() as sock:
@@ -44,9 +41,14 @@ def ready(url, process):
     raise RuntimeError("Fixture readiness timed out")
 
 
-def check(agent_binary, gateway_binary):
-    source = (ROOT / "submodules/daedalus-switchyard/routes_custom.toml").read_text()
+def check(agent_binary, gateway_binary, routes_path):
+    source = Path(routes_path).read_text()
     config = tomllib.loads(source)
+    if any(
+        client["format"] != "openai_chat"
+        for client in config["llm_clients"].values()
+    ):
+        raise ValueError("Synthetic peer supports only openai_chat provider routes")
     state = {"providers": [], "judges": 0, "mode": "normal"}
 
     class Peer(BaseHTTPRequestHandler):
@@ -66,14 +68,15 @@ def check(agent_binary, gateway_binary):
                         "uncertain",
                     )
                 }
-                probabilities["low"] = 1.0
+                choice = state.get("choice", "low")
+                probabilities[choice] = 1.0
                 data = json.dumps(
                     {
                         "model": "fixture-judge",
                         "answers": {
                             "effort": {
                                 "type": "choice",
-                                "choice": "low",
+                                "choice": choice,
                                 "confidence": 1.0,
                                 "probabilities": probabilities,
                             }
@@ -161,9 +164,8 @@ def check(agent_binary, gateway_binary):
         ) as directory:
             directory = Path(directory)
             base = f"http://127.0.0.1:{peer.server_port}/v1"
-            source = source.replace(
-                config["llm_clients"]["fireworks"]["base_url"], base
-            )
+            for client in config["llm_clients"].values():
+                source = source.replace(client["base_url"], base)
             source = source.replace(
                 config["routes"]["stage"]["classifier"]["base_url"], base
             )
@@ -205,7 +207,6 @@ def check(agent_binary, gateway_binary):
             path.write_text(json.dumps(agent_config))
             env = {
                 "PATH": os.environ.get("PATH", ""),
-                "FIREWORKS_API_KEY": "synthetic",
                 "DAEDALUS_CONFIG_FILE": str(path),
                 "DAEDALUS_PORT": str(agent_port),
                 "DAEDALUS_INTERNAL_API_TOKEN": "fixture-internal",
@@ -214,6 +215,9 @@ def check(agent_binary, gateway_binary):
                 "DAEDALUS_AUTHORIZATION": "rust",
                 "DAEDALUS_TOOL_EXECUTOR": "disabled",
             }
+            for client in config["llm_clients"].values():
+                if client.get("api_key_env"):
+                    env[client["api_key_env"]] = "synthetic"
             with (directory / "process.log").open("w+") as log:
                 try:
                     for command, url in [
@@ -239,6 +243,7 @@ def check(agent_binary, gateway_binary):
 
                     cases = [
                         (None, "normal"),
+                        *[(None, "classify_" + level) for level in ("instant", "high", "max")],
                         *[(level, "normal") for level in model_routes],
                         (None, "timeout"),
                         ("low", "upstream_failure"),
@@ -259,7 +264,8 @@ def check(agent_binary, gateway_binary):
                         ],
                     ]
                     for index, (profile, mode) in enumerate(cases):
-                        state.update(providers=[], call_ids=[], judges=0, mode=mode)
+                        choice = mode.removeprefix("classify_") if mode.startswith("classify_") else "low"
+                        state.update(providers=[], call_ids=[], judges=0, mode=mode, choice=choice)
                         body = {
                             "stream": True,
                             "messages": [
@@ -316,7 +322,7 @@ def check(agent_binary, gateway_binary):
                             target = (
                                 config["routes"]["stage"]["default_target"]
                                 if mode == "timeout"
-                                else profile or "low"
+                                else profile or config["routes"]["stage"]["classifier"]["choices"][choice]["target"]
                             )
                             for payload in state["providers"]:
                                 assert (
@@ -417,7 +423,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--agent-binary", required=True)
     parser.add_argument("--gateway-binary", required=True)
+    parser.add_argument("--routes", type=Path, required=True)
     args = parser.parse_args()
     check(
-        str(Path(args.agent_binary).resolve()), str(Path(args.gateway_binary).resolve())
+        str(Path(args.agent_binary).resolve()),
+        str(Path(args.gateway_binary).resolve()),
+        args.routes,
     )

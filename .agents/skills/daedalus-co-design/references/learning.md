@@ -14,7 +14,7 @@ Keep current reusable knowledge, not a run transcript. Follow
   Deployment environment overrides can replace that default.
 - **Action:** resolve effective mappings and selected routes before declaring a
   live defect; reconcile profile choices, skill promotion, UI/protocol values and
-  gateway aliases when migrating to the approved six levels.
+  gateway aliases when migrating to the current user-approved contract.
 - **Limit:** source inspection only; no failing production request or corrected
   joint-path test demonstrated during skill creation. Subsequent removal is
   covered by L005; historical evidence above is not a current source default.
@@ -50,7 +50,7 @@ Keep current reusable knowledge, not a run transcript. Follow
   compared target model/body fields; this is configuration evidence, not a live
   model regression or a claim about supported provider effort values.
 - **Recheck:** on 2026-11-07 around 13:39 UTC, the same ConfigMap content hash
-  matched all parsed targets and routes in `routes_custom.toml` at gateway
+  matched all parsed targets and routes in the then-selected provider TOML at gateway
   `7250faaba434f18153ed2dd6c832156823087a1b`; agent remained at `22de3aa`.
   Independent parsed assertions confirmed identical provider configurations for
   `high`/`low` and `xhigh`/`medium` (excluding target IDs). Do not carry the old
@@ -117,19 +117,19 @@ Keep current reusable knowledge, not a run transcript. Follow
 
 ## Q001: verify effective provider semantics
 
-- **Status:** six-level public contract implemented in source and aligned with
-  gateway aliases. Effective provider behavior and quality tradeoffs still need
-  production evidence. Not deployed.
-- **User direction:** balance quality, latency and cost using `max`, `xhigh`,
-  `high`, `medium`, `low`, `instant`. Public `none` was explicitly removed; there
-  is no outstanding requirement to implement it.
-- **Next check:** verify effective choices, caller overrides and actual provider
-  payloads for the six supported levels. Never infer provider support, quality
-  or latency ordering from public profile names alone.
+- **Status:** the target classifier contract is max/high/low/instant. Provider
+  aliases, native reasoning settings and fallback remain separate contracts.
+- **User direction:** on 2026-11-09 the user corrected the prior review: four
+  classifications are intentional. Discover provider sources with `routes_*.toml`
+  and align affected consumers as new providers are onboarded. Do not restore six
+  categories based on historical guidance. Public `none` remains retired.
+- **Next check:** verify selected-source versus loaded-route correspondence,
+  caller overrides and actual provider payloads. Measure independent task quality,
+  latency and cost before claiming a benefit from the four-category migration.
 
 ## L006: correlate logical model calls separately from transport attempts
 
-- **Status:** verified built joint boundary; live rollout pending.
+- **Status:** verified built joint boundary; partial live joins observed.
 - **Evidence:** 2026-11-07, agent based on `22de3aa`, gateway image
   `0509fb5988d55490ae6db48928b67d018534fecd52c4c09e2d4d6fb94d73f073`.
   Updated `check_effort_boundary.py` verifies opaque `dc-` IDs in agent
@@ -142,6 +142,11 @@ Keep current reusable knowledge, not a run transcript. Follow
 - **Limit:** a deployed application probe completes, but its older backend does
   not emit the new IDs. Full live joins require the changed agent image. Existing
   Switchyard support suffices; no gateway code rollout is needed for this header.
+- **Recheck evidence:** 2026-11-09 11:59–12:29 UTC capture joined 12 of 16
+  backend logical call IDs to gateway spans exactly. Gateway output reached the
+  250-line bound; missing joins do not establish missing propagation. Traffic
+  origin and deployed-image/source correspondence remain unverified. The earlier
+  rollout gap is historical, not a claim that the current backend lacks IDs.
 - **Recheck:** provider transport retry ownership, wire headers, run-ID generation,
   gateway metadata allowlist or logging changes.
 
@@ -201,17 +206,19 @@ Keep current reusable knowledge, not a run transcript. Follow
 
 ## L009: expose provider settings separately from task-classification categories
 
-- **Status:** verified source, built boundary and documented provider semantics.
+- **Status:** verified historical source/boundary; current payload defaults have
+  changed (L010). The separation of profiles and task categories still applies.
 - **Evidence:** user selected four DeepSeek-only passthrough profiles on
   2026-11-07. Fireworks' Chat Completions reference maps DeepSeek V4.1 low to low,
   medium/high/xhigh to high, max to max, and none to reasoning disabled:
   https://docs.fireworks.ai/api-reference/post-chatcompletions . Historical L003
   six-target source mappings are superseded by this source change, not evidence
   that a deployed configuration has already changed.
-- **Action:** custom public profiles are instant/low/high/max, requesting
-  none/low/high/max. Keep six internal task categories when useful, but map
-  medium/high/xhigh to the single high target. Fallback also uses high. Remove
-  duplicate medium/xhigh custom aliases; migrate callers to high or automatic.
+- **Historical mapping:** custom public profiles were instant/low/high/max,
+  requesting none/low/high/max in that Fireworks configuration. The later user
+  correction in Q001 sets four classifier categories; preserve the distinction
+  from explicit profiles and provider effort. The historical migration removed
+  duplicate medium/xhigh custom aliases; it migrated those callers to high or automatic.
   Generic agent validation can retain other levels for other provider variants;
   the shipped workflow exposes only configured custom profiles.
 - **Verification:** actual built agent/gateway boundary (14 cases), seven gateway
@@ -229,3 +236,33 @@ Keep current reusable knowledge, not a run transcript. Follow
 - **Recheck:** provider family or effort normalization, public inventory,
   task-to-target mappings, deployment configuration or suite changes. The
   November 6 multi-model benchmark cannot justify a same-model effort inversion.
+
+## L010: discover provider variants and align to the current user contract
+
+- **Status:** verified route-consumer drift; prior six-category recommendation
+  superseded by explicit user correction on 2026-11-09.
+- **Evidence:** gateway `d434e0c`, agent `1764e08`, sandbox `cc072ea`.
+  Splitting the provider configuration left a deleted filename in Make/deploy
+  defaults, tests and docs; the five-test route suite failed on that missing file.
+  The sampled live ConfigMap matched Baseten targets/routes and four categories.
+  The previous review wrongly treated four categories as a defect by following
+  stale instructions. The user clarified the intended four-category contract.
+- **Action:** discover every `routes_*.toml`, validate max/high/low/instant
+  classifier choices and prose, and require explicit source selection for live
+  operations. Align source, tests, helpers and docs within the requested work.
+  Keep explicit aliases, fallback targets and native effort settings separate;
+  do not equate a profile name with measured provider capability.
+- **Regression:** provider contract tests and parent learner tests now discover
+  the complete glob. Learner edits are limited to the four categories; existing
+  provider targets, native payloads, explicit aliases and retained gates are
+  preserved. The deleted filename is no longer an active input or default.
+- **Built verification:** synthetic agent -> gateway -> judge/provider checks
+  passed all four automatic choices, explicit profiles, tool continuation,
+  timeout, retry and rejection cases for both Chat variants. All discovered
+  provider files passed the built gateway's configuration validation. Native
+  Responses end-to-end coverage and live quality comparison remain separate.
+- **Limit:** frozen investigation records retain historical filenames and values
+  as provenance. Offline contract checks do not establish provider capability,
+  task quality, latency or cost; rollout and matched trials remain separate.
+- **Recheck:** provider onboarding, user contract changes, route inventory,
+  classifier choices, consumers, loaded configuration or wire defaults change.

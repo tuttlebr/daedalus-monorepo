@@ -13,10 +13,10 @@ to improve the system.
 
 | Owner | Responsibility |
 | --- | --- |
-| Agent | Generic six-label schema; only configured profiles may be selected. Shipped DeepSeek exposes four; omission remains automatic. Emit a generated opaque correlation ID with each logical model call in logs and both request-ID headers. New agent loop retries/continuations get new IDs. Transport-internal retries retain that logical ID. Preserve authorization and conversation affinity separately. |
+| Agent | Generic six-label schema; only configured profiles may be selected. The classifier has four categories; shipped agent profiles expose four; omission remains automatic. Emit a generated opaque correlation ID with each logical model call in logs and both request-ID headers. New agent loop retries/continuations get new IDs. Transport-internal retries retain that logical ID. Preserve authorization and conversation affinity separately. |
 | Switchyard | Consume existing `x-switchyard-request-id`/`x-request-id` metadata, include it in routing spans, and forward the allowlisted request ID upstream. Its existing pinned implementation supports this; no gateway code change is required. |
 | Learner | Send synthetic LAN probes, correlate exact IDs, measure stream completion and deterministic outcomes, propose one classifier-only change, evaluate paired trials and holdout, retain evidence and the best local policy. |
-| Deployment | A new agent image is needed for live backend-to-gateway joins. Mixed versions still serve requests; absent correlation is an explicit evidence gap. The learner does not deploy, publish, commit, or advance gitlinks. |
+| Deployment | Verify correlation coverage on the running agent image. Mixed versions still serve requests; absent correlation is an explicit evidence gap. The learner does not deploy, publish, commit, or advance gitlinks. |
 
 ## Secure API key
 
@@ -33,11 +33,17 @@ protected by filesystem permissions; remove the file/revoke the key when retired
 ```bash
 uv run --python 3.12 --no-project python \
   .agents/skills/daedalus-co-design/scripts/co_design_loop.py \
+  --routes submodules/daedalus-switchyard/routes_fireworks.toml \
   --gateway-url http://192.168.1.234:30260/v1 \
   --app-url https://daedalus.ddns.me/v1 \
   --api-key-file ~/.config/daedalus/probe-api-key \
   --context kubernetes-admin@kubernetes --probe-only
 ```
+
+`--routes` is required. Discover available `routes_*.toml` files and select the
+actual provider variant explicitly; the example uses Fireworks. Do not select
+a provider by glob order or maintain an exhaustive provider list. Source/live mismatch invalidates
+provider-effort comparisons even when public aliases match.
 
 The gateway URL must point at the intended LAN NodePort. The application URL
 exercises nginx, compatibility API authentication, queue, worker, backend and
@@ -107,6 +113,10 @@ different deliverable. If a fixture expectation is wrong, preserve the original
 run, version the correction, and restart the baseline. Never relabel a completed
 candidate trial to manufacture an accepted improvement.
 
+The target classifier categories are max, high, low and instant. The runner
+rejects a selected classifier with a different inventory before live traffic.
+Explicit passthrough aliases and provider-native reasoning values are independent.
+
 Only one of `instructions`, `choices.<profile>.criteria`, or
 `choices.<profile>.min_probability` may change. The parsed TOML must differ only
 at that field. Endpoints, models, public profiles, tools, tests, gates, budgets
@@ -124,7 +134,7 @@ All artifacts are private and ignored under `.artifacts/daedalus-co-design/`:
 source/sandbox/candidate TOML, actual outgoing parameters, per-case metrics,
 classifier logs, iteration ledger, optional `best.toml`, Kubernetes capture and
 report. Rejected policies remain evidence, never become the next parent. The
-best artifact is **not** written into `routes_custom.toml` or deployed. Promote a
+best artifact is **not** written into the selected source route file or deployed. Promote a
 validated policy with the normal reviewed change/rollout, then repeat full-path
 probes using the deployed build and new heldout cases.
 
@@ -141,7 +151,9 @@ uv run --python 3.12 --no-project python \
   .agents/skills/daedalus-co-design/scripts/test_co_design_loop.py
 ```
 
-Also run the built agent/gateway `check_effort_boundary.py`; it verifies logical
+Also run the built agent/gateway `check_effort_boundary.py --routes <selected-file>`
+with both binary arguments. Its synthetic provider supports Chat routes (Fireworks
+and Baseten); native OpenAI Responses transport needs a separate fixture. It verifies logical
 call-ID propagation through tool continuations and transport retry, plus all
 public effort and failure contracts. Reconcile reusable findings into
 `references/learning.md` after each run. Candidate acceptance alone is not a

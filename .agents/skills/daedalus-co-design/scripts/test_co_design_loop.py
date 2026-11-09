@@ -7,7 +7,8 @@ from pathlib import Path
 
 import co_design_loop as loop
 
-SOURCE = (loop.ROOT / "submodules/daedalus-switchyard/routes_custom.toml").read_text()
+ROUTES = sorted((loop.ROOT / "submodules/daedalus-switchyard").glob("routes_*.toml"))
+SOURCE = ROUTES[0].read_text()  # Offline fixture only; live runs require --routes.
 
 
 def row(correct=True, seconds=10, tokens=10, route=True):
@@ -22,6 +23,23 @@ def row(correct=True, seconds=10, tokens=10, route=True):
 
 
 class LoopTests(unittest.TestCase):
+    def test_every_provider_supports_the_classifier_edit_contract(self):
+        self.assertTrue(ROUTES)
+        for path in ROUTES:
+            with self.subTest(provider=path.name):
+                source = path.read_text()
+                before = loop.tomllib.loads(source)
+                self.assertEqual(set(before["routes"]["stage"]["classifier"]["choices"]), set(loop.CLASSIFICATIONS))
+                for level in loop.CLASSIFICATIONS:
+                    updated = loop.tomllib.loads(loop.apply_edit(source, {
+                        "field": f"choices.{level}.criteria", "value": "Synthetic rule.", "reason": "test",
+                    }))
+                    self.assertEqual(updated["targets"], before["targets"])
+                    self.assertEqual(updated["llm_clients"], before["llm_clients"])
+                for level in ("medium", "xhigh"):
+                    with self.assertRaises(ValueError):
+                        loop.apply_edit(source, {"field": f"choices.{level}.criteria", "value": "Invalid", "reason": "test"})
+
     def test_streaming_relay_does_not_forward_credentials_or_accept_unauthorized_calls(
         self,
     ):
@@ -264,19 +282,18 @@ class LoopTests(unittest.TestCase):
             self.assertEqual(loop.secret(key), "synthetic-key")
 
     def test_sandbox_has_only_explicit_upstream_aliases(self):
-        source = loop.sandbox_routes(
-            SOURCE, "http://localhost:123/v1", "http://localhost:456/v1"
-        )
-        config = loop.tomllib.loads(source)
-        self.assertEqual(
-            set(config["targets"]), set(loop.tomllib.loads(SOURCE)["targets"])
-        )
-        for level in config["targets"]:
-            self.assertEqual(config["targets"][level]["model"], "daedalus/" + level)
-        self.assertEqual(
-            config["llm_clients"]["fireworks"]["extra_headers"],
-            {"x-probe-relay-token": "synthetic-test"},
-        )
+        for path in ROUTES:
+            with self.subTest(provider=path.name):
+                source = loop.sandbox_routes(
+                    path.read_text(), "http://localhost:123/v1", "http://localhost:456/v1"
+                )
+                config = loop.tomllib.loads(source)
+                self.assertEqual(set(config["targets"]), set(loop.tomllib.loads(path.read_text())["targets"]))
+                for level in config["targets"]:
+                    self.assertEqual(config["targets"][level]["model"], "daedalus/" + level)
+                for client in config["llm_clients"].values():
+                    self.assertEqual(client["base_url"], "http://localhost:123/v1")
+                    self.assertEqual(client["extra_headers"], {"x-probe-relay-token": "synthetic-test"})
 
     def test_correlation_does_not_join_timestamp_or_other_run(self):
         cid = "dc-" + "a" * 64

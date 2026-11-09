@@ -15,6 +15,20 @@ Defaults cover backend, gateway, decision service, autonomous agent and stream
 workers. Repeated `--pod-prefix` arguments replace that scope when needed.
 See `--help` for bounds.
 
+Source provenance includes agent, Switchyard and sandbox revisions/dirty state;
+sandbox server, verification launcher/install code, Dockerfile and chart defaults
+are hashed alongside agent/gateway configuration. These are source fingerprints,
+not proof of a deployed rootfs or effective allowlist.
+
+For execution/linting issues, discover sandbox pod names in namespace `daedalus`
+and include their observed prefix with `--pod-prefix`. Repeat all prefixes needed
+for that capture, including the agent, because explicit prefixes replace defaults.
+Do not assume the sandbox is deployed in the agent namespace: an external service
+or no matching pod is a coverage gap. Record its deployment location from current
+configuration; additional namespace/host log access follows task authorization.
+Use sandbox `execution`/`execution_error` and readiness evidence as described in
+[the sandbox contract](sandbox-contract.md), without collecting submitted code.
+
 After changing the collector, run its offline behavior checks from the root:
 `PYTHONDONTWRITEBYTECODE=1 python3 .agents/skills/daedalus-co-design/scripts/test_capture_runtime.py`.
 

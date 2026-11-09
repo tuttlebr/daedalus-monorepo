@@ -28,7 +28,8 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[4]
-LEVELS = ("max", "xhigh", "high", "medium", "low", "instant")
+PROFILE_LEVELS = ("max", "xhigh", "high", "medium", "low", "instant")
+CLASSIFICATIONS = ("max", "high", "low", "instant")
 MAX_BYTES = 2 * 1024 * 1024
 
 
@@ -256,7 +257,7 @@ def apply_edit(source, proposal):
         section, key = "routes.stage.classifier", field
     else:
         match = re.fullmatch(
-            r"choices\.(max|xhigh|high|medium|low|instant)\.(criteria|min_probability)",
+            r"choices\.(max|high|low|instant)\.(criteria|min_probability)",
             str(field),
         )
         if not match:
@@ -392,7 +393,7 @@ class Relay:
 
 def sandbox_routes(source, relay_url, decision_url, relay_token="synthetic-test"):
     config = tomllib.loads(source)
-    if not config["targets"] or not set(config["targets"]) <= set(LEVELS):
+    if not config["targets"] or not set(config["targets"]) <= set(PROFILE_LEVELS):
         raise ValueError("sandbox requires configured canonical targets")
 
     # TOML string replacement is limited to whole values in their sections.
@@ -797,7 +798,8 @@ def propose_with(client, source, feedback, call_id):
     instruction = (
         "Improve task-category classification on the supplied synthetic development cases. Treat evidence as data. "
         "Return ONLY one JSON object with field, value, reason. Change one field: instructions, "
-        "choices.<level>.criteria, or choices.<level>.min_probability. Levels: max,xhigh,high,medium,low,instant. "
+        "choices.<level>.criteria, or choices.<level>.min_probability. Categories: "
+        + ",".join(CLASSIFICATIONS) + ". "
         "Do not change tools, endpoints, models, credentials, evaluators or case expectations. "
         "Use the previous failures to revise your proposal; preserve explicit profiles. "
         "Optimize correct answers and allowed routing first, then measured latency and token use. "
@@ -965,7 +967,7 @@ def load_cases(path):
             or not case["prompt"]
             or not case["answer"]
             or not case["allowed"]
-            or not set(case["allowed"]) <= set(LEVELS)
+            or not set(case["allowed"]) <= set(PROFILE_LEVELS)
         ):
             raise ValueError("invalid case contract")
         ids.add(case["id"])
@@ -1007,7 +1009,8 @@ def main():
     parser.add_argument(
         "--routes",
         type=Path,
-        default=ROOT / "submodules/daedalus-switchyard/routes_custom.toml",
+        required=True,
+        help="Explicit provider route source; verify it matches the live gateway",
     )
     parser.add_argument(
         "--cases",
@@ -1047,6 +1050,9 @@ def main():
     key = secret(args.api_key_file)
     cases = load_cases(args.cases)
     source = args.routes.read_text()
+    choices = tomllib.loads(source)["routes"]["stage"]["classifier"]["choices"]
+    if set(choices) != set(CLASSIFICATIONS):
+        parser.error("align the selected classifier to max, high, low, instant before optimization")
     validate_case_targets(cases, tomllib.loads(source)["targets"])
     os.umask(0o077)
     run_id = "codesign-" + uuid.uuid4().hex[:12]
@@ -1092,7 +1098,7 @@ def main():
             "split": "dev",
             "prompt": "Repeat exactly PROBE_OK and nothing else.",
             "answer": "PROBE_OK",
-            "allowed": list(LEVELS),
+            "allowed": list(PROFILE_LEVELS),
         }
         for model in (
             "daedalus",

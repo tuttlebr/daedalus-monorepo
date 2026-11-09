@@ -1,6 +1,7 @@
 """Offline behavioral checks; no Kubernetes or provider calls."""
 
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -93,6 +94,22 @@ class CaptureTest(unittest.TestCase):
             self.assertEqual(code, 2)
             self.assertTrue((directory / "switchyard-a--app--current.stdout").read_bytes())
             self.assertTrue(any("Command failed" in g for g in manifest["gaps"]))
+
+    def test_sandbox_provenance_and_explicit_log_scope(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "submodules/daedalus-sandbox/tooling/verify.py"
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b"synthetic checker source\n")
+            code, _, manifest, calls = self.run_capture(
+                root, [pod("switchyard-a"), pod("llm-sandbox-a")],
+                extra=("--pod-prefix", "llm-sandbox-"))
+            self.assertEqual(code, 0)
+            self.assertEqual(manifest["source"]["submodules/daedalus-sandbox"],
+                             {"head": "fixture-sha", "status": ""})
+            self.assertEqual(manifest["source_sha256"][str(path.relative_to(root))],
+                             hashlib.sha256(path.read_bytes()).hexdigest())
+            self.assertTrue(any("logs" in c and "llm-sandbox-a" in c for c in calls))
 
     def test_bounds_and_missing_scope_are_not_passes(self):
         for pods, extra, expected in (
