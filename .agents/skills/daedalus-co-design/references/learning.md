@@ -384,3 +384,81 @@ Keep current reusable knowledge, not a run transcript. Follow
   storage migration is separate from redeployment.
 - **Recheck:** image build mappings/platforms, Make/env precedence, rollout or
   recovery commands, PVC templates, session image identity or owner boundaries.
+
+## L016: validation entrypoints must run on the maintainer's shell
+
+- **Status:** verified source defect with offline regression on two shells.
+- **Evidence:** Switchyard `bfb40e7`, reviewed 2026-11-09 on macOS where only
+  bash 3.2 exists. `scripts/deploy.sh` and `scripts/render_routes.sh` used
+  `declare -A`, `[[ -v ]]` and `mapfile`, so `make validate`, `make deploy` and
+  the offline suite failed there: 19 failures and 4 errors, all shell-related.
+  Context's root Makefile and operator scripts also require bash 4+ and
+  `/usr/bin/bash`; its `scripts/tests` suite reports 5 failures and 5 errors on
+  the same host before and after unrelated changes.
+- **Verification:** ported both Switchyard scripts to prefixed scalars,
+  `${!name+x}` and `while read` loops. The suite passes under bash 3.2 (70 run)
+  and under Linux bash 5.2 in a container (142 run); remaining skips need the
+  built gateway binary. Precedence tests for caller/.env/empty values still pass.
+- **Action:** treat a failing shell-driven suite as a host-compatibility
+  question before a routing defect. Keep deployment scripts within bash 3.2 or
+  state the requirement; context remains Linux-operated by design.
+- **Limit:** no live deployment was run; semantics were established by the
+  synthetic command-peer tests, not a cluster rollout.
+- **Recheck:** new shell scripts, Make `SHELL` settings or test harness changes.
+
+## L017: templates and fallbacks must track the served information layer
+
+- **Status:** verified source drift and fail-closed consumer; fixed with regressions.
+- **Evidence:** agent `44b9370e`, context `3662469`, reviewed 2026-11-09.
+  The agent `.env.template` named `llama-nemotron-embed-vl-1b-v2` and
+  `llama-nemotron-rerank-1b-v2`; the retriever serves only the Nemotron 3.5
+  models and the embedder has no legacy alias, so a template-built deployment
+  loses every query embedding while readiness stays ready. The agent's upload
+  metadata label `EMBEDDING_NIM_MODEL_NAME` defaulted to the old model and was
+  generated nowhere. RSS discovery returned no sources on reranker failure
+  although topology declares reranking fail-open. `refresh_promote.py` archived
+  every `default` collection without a refresh fingerprint, including the
+  agent's `meta` and `user_uploads*`.
+- **Verification:** parent `test_context_boundary.py` now checks template and
+  generated values against `rag-schema.yaml`; `contextctl` emits
+  `EMBEDDING_NIM_MODEL_NAME` and both generated files pass `--check`; agent RSS
+  tests cover fail-open discovery and fail-closed single-article mode
+  (pre-existing test-order leak in that file: the full-file run fails after the
+  first harness test in this environment, baseline included); url-ingest tests
+  cover `refresh_owned` (48 pass).
+- **Action:** compare operator templates with the generator, not only the
+  generated files; apply the fail-open contract to every reranker consumer;
+  scope destructive data migrations to owned collections.
+- **Limit:** no live embedding, retrieval or promotion run; the Rust default
+  for the metadata label is unchanged because no Rust toolchain was available.
+- **Recheck:** served model IDs, generator keys, reranker consumers or shared
+  Milvus database ownership change.
+
+## Q002: open review findings awaiting owners
+
+- **Status:** hypotheses with code locations; not fixed in this pass because
+  they need the built gateway/agent, a cluster, or an owner decision.
+- **Decided 2026-11-09 (user):** provider affinity is managed by Switchyard's
+  header specification, the selected route file's `extra_headers`. A
+  deployment-wide `GLOBAL_SESSION_ID` is the intended contract, not a defect;
+  do not add per-conversation affinity negotiation to the agent. The agent's
+  standard `user` field remains provider cache affinity and the unused
+  `x-switchyard-session-id` header is a cleanup candidate for a future Rust
+  build, not a contract. Direct `model_endpoint.rs` forwards and autonomy
+  planning still send no correlation headers; that remains open. OpenAI targets set `stream = true` while autonomy
+  planning posts `stream:false` to Chat; untested on that transport. The
+  agent's retry rule keys on the literal `SwitchyardError` transport envelope
+  that no gateway test pins. Nothing probes the `decision-api` classifier
+  endpoint before deployment.
+- Sandbox: ClientIP affinity plus one execution per pod funnels all backend
+  traffic to one replica and loses pod-local workspaces on pod change; the
+  capabilities text shows the server maximum timeout, not the agent's 60 s cap;
+  reserved environment names and argv/env limits are not advertised by
+  discovery; cancelled executions keep the workspace lock; default agent
+  network policy has no egress rule to the sandbox namespace.
+- Context: k8s MCP config auto-approves write/Helm/exec tools that the server
+  currently disables; `distance_cutoff` polarity is wrong for COSINE
+  collections; citations lack title and ingest time.
+- **Next check:** build the gateway and agent images, then extend
+  `check_effort_boundary.py` with Chat `stream:false`, the transport-error
+  envelope and header forwarding. Affinity scope is decided above.

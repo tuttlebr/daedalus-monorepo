@@ -68,6 +68,28 @@ class ContextBoundaryTest(unittest.TestCase):
                 self.assertEqual(resolve(domain["reranker_model"]), rag["reranker"]["model"])
                 self.assertEqual(resolve(domain["database_name"]), rag.get("database", "default"))
 
+    def test_agent_env_template_names_served_models(self):
+        """A template built without render-agent-env must still name served models.
+
+        The embedder serves no legacy aliases; a stale template ID fails every
+        query embedding while readiness still reports ready.
+        """
+        template = dict(
+            line.split("=", 1)
+            for line in (AGENT / ".env.template").read_text().splitlines()
+            if "=" in line and not line.startswith("#")
+        )
+        rag = contextctl.load_yaml(CONTEXT / "stack/rag-schema.yaml")
+        generated = dict(
+            token.split("=", 1)
+            for token in shlex.split(contextctl.agent_env("production"), comments=True)
+        )
+        self.assertEqual(template["EMBEDDING_MODEL"], rag["embedding"]["model"])
+        self.assertEqual(template["RERANKER_MODEL"], rag["reranker"]["model"])
+        # Upload metadata records this ID; it must name the same embedding space.
+        self.assertEqual(template["EMBEDDING_NIM_MODEL_NAME"], rag["embedding"]["model"])
+        self.assertEqual(generated["EMBEDDING_NIM_MODEL_NAME"], rag["embedding"]["model"])
+
 
 if __name__ == "__main__":
     unittest.main()

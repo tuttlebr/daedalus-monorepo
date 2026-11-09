@@ -17,7 +17,7 @@ validation. Hindsight is an external integration, not a fifth owned submodule.
 | Model intent and aliases | `protocol/model-profile.schema.json`, `backend/tool-calling-config.yaml`, `builder/runtime/src/preparation.rs`, `builder/runtime/src/agent.rs` | every discovered `routes_*.toml` | Resolved caller aliases exist; explicit intent survives default merging; automatic selection stays gateway-owned. |
 | Provider wire/stream | `builder/runtime/src/provider.rs`, `builder/runtime/src/config.rs` | `patches/`, `Dockerfile` | Responses/Chat, terminal SSE, tool schema/results, reasoning history, usage, errors and retries agree on actual built artifacts. |
 | Deployment/config | `helm/daedalus/`, `.env.example` | `charts/switchyard/`, `scripts/render_routes.py`, `scripts/deploy.sh` | Service/port, selected routes, environment substitutions, capabilities, image digest and runtime config match. |
-| Request identity | `builder/runtime/src/provider.rs` | Header/transport patches and request logs | Distinguish correlation, run IDs, routing session, provider affinity and standard `user`; verify propagation. |
+| Request identity | `builder/runtime/src/provider.rs` | Header/transport patches and request logs | Distinguish correlation, run IDs, routing session and standard `user`; verify propagation. Provider affinity is Switchyard's contract, set by the selected route file's `extra_headers`; the agent does not negotiate it per request. |
 | Decision service | Complete model request and tool continuations | Decision patches, `docs/decision-input-limits.md`, `docs/standalone-decision-routing.md` | Input budgeting, media, discovery, deadline and fallback preserve answering-request semantics. |
 
 ## Source facts to recheck
