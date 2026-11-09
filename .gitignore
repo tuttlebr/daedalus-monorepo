@@ -1,3 +1,5 @@
 # Private runtime evidence; only sanitized lessons belong in the shared skill.
 /.artifacts/daedalus-co-design/
 .DS_Store
+# Per-developer Claude Code permissions; the skills symlink stays tracked.
+.claude/settings.local.json

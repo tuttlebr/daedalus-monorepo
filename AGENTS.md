@@ -26,6 +26,8 @@ quality, latency, and cost. Learn from bounded Kubernetes log reads in namespace
 `daedalus` on each relevant skill run; no scheduled automation is configured.
 
 Keep this shared skill and its sanitized lessons in the parent repository, not
-personal skill directories or the agent's runtime skill catalog. Follow each
+personal skill directories or the agent's runtime skill catalog.
+`.claude/skills/daedalus-co-design` is a relative symlink to that `.agents/skills`
+directory so Claude Code discovers the skill; edit the source, not the link. Follow each
 submodule's instructions for its code. Preserve unrelated work and independently
 track changes, validation, and commits in the parent and each submodule.
