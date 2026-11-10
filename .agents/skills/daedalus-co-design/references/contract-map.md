@@ -51,6 +51,16 @@ validation. Hindsight is an external integration, not a fifth owned submodule.
   target defaults. An explicit alias alone does not prove the emitted effort.
 - Selected TOML can differ from the chart example. Classifier prose/comments can
   lag executable fields; reconcile them when changing policy.
+- Leave `stream` unset on every target. A target default replaces the caller's
+  choice on any request translated between Chat and Responses and whenever the
+  field is omitted. The agent's automation planning and direct model forwards
+  are non-streaming Chat callers of the automatic route.
+- Retries exist at two layers. A gateway client retries twice before a response
+  when `max_retries` is unset, and has no upstream deadline when `timeout_ms` is
+  unset; no provider file sets either. The automatic route then tries
+  `default_target`. The agent retries each failed attempt again. Count the
+  product, not one setting. After a response starts only the agent retries, and
+  only on the gateway's `upstream transport error: ` stream frame.
 
 The agent architecture guide must describe standalone classification on every
 model continuation. A stable session header is not evidence of sticky routing;
@@ -88,11 +98,13 @@ and the owning repository's required gates.
   `tests/test_provider_routes.py` discovers every provider file and checks the
   four-category contract and resolving aliases/targets. Use Python 3.11+ for `tomllib` (for example `uv run --python 3.12 --no-project python`).
   HTTP regressions in `tests/test_decision_api.py`,
-  `tests/test_fireworks_chat_transport.py` and `tests/test_responses_transport.py`
-  need built artifacts; inspect
-  `SWITCHYARD_TEST_BINARY` handling and report skips. `make validate` renders/lints
-  selected routes/chart and may require header environment values; avoid exposing
-  rendered values in public output.
+  `tests/test_fireworks_chat_transport.py`, `tests/test_responses_transport.py`
+  and `tests/test_stream_contract.py` need built artifacts; inspect
+  `SWITCHYARD_TEST_BINARY` handling and report skips. The last one calls every
+  route of every provider file through Chat and Responses with streaming on,
+  off and omitted, and pins the mid-stream transport error frame.
+  `make validate` renders/lints selected routes/chart and may require header
+  environment values; avoid exposing rendered values in public output.
 - Switchyard `make test` is a **live model probe**, not the offline suite.
   `scripts/test_decision_judge.py` also probes a service. Inspect bounds/endpoints
   and authorization first. Deployment targets can build, publish and mutate the
@@ -104,19 +116,41 @@ and the owning repository's required gates.
 - Parent `scripts/check_effort_boundary.py` (relative to this skill) exercises
   built agent -> gateway -> synthetic classifier/provider using selected route
   defaults and loopback endpoints. Pass `--routes` and both binary paths on a
-  compatible host. The synthetic provider supports Chat transport (Fireworks
-  and Baseten), not native OpenAI Responses.
+  compatible host. The synthetic provider speaks Chat and native Responses, so
+  every current provider file can be selected.
   Covers automatic/explicit routing, tool continuation, classifier timeout,
-  upstream retry, malformed tool rejection and retired profiles.
+  a transient upstream failure, a mid-stream upstream abort, the combined
+  request count under persistent failure, malformed tool rejection, retired
+  profiles and the non-streaming automation-planning forward with its
+  correlation ID. A new retry layer or a changed gateway default fails the
+  persistent-failure count; update `GATEWAY_RETRIES` only with source evidence.
   It does not validate real provider capabilities, latency, or task quality.
+- Without a local Rust toolchain or on a non-Linux host, build both binaries in
+  containers and run the check there. From the Switchyard root,
+  `docker build --target builder -t <tag> .` leaves the gateway at
+  `/opt/switchyard/target/release/switchyard-server`. Build the agent with
+  `cargo build --locked --manifest-path builder/runtime/Cargo.toml` in a Rust
+  1.95 container, mounting the agent read-only and `CARGO_TARGET_DIR` on a
+  volume. Run this script and the Switchyard suite with
+  `SWITCHYARD_TEST_BINARY` in a Linux image with Python 3.11+ and a libc at
+  least as new as both builds. Locally built binaries are not the published
+  images.
 
 - Parent `scripts/test_context_boundary.py` resolves generated context settings
   against the real agent workflow under changed synthetic topology for both
-  environments. Run with Python 3.12, PyYAML and jsonschema. This configuration
+  environments, and checks the agent template against served model IDs and the
+  generated address of every context-owned MCP server the workflow registers.
+  Run with Python 3.12, PyYAML and jsonschema. This configuration
   regression does not substitute for ingestion/retrieval through the built agent.
+- Parent `scripts/test_model_alias_boundary.py` requires every alias the agent
+  workflow defaults to, or its templates name (comments included), on every
+  discovered provider file. Run with Python 3.12 and PyYAML. Offline only.
 - Parent `scripts/co_design_loop.py` and `scripts/test_co_design_loop.py` implement
   bounded recursive live policy trials, secure application probes, exact-ID
   log joins and deterministic quality/holdout gates. See `recursive-loop.md`.
 - Agent `model_call_started.correlation_id` matches outbound `x-request-id` and
-  `x-switchyard-request-id`. IDs are per logical model call; SDK transport retries
-  retain the ID. Backend run IDs remain separate from opaque provider affinity.
+  `x-switchyard-request-id`. Each agent attempt has its own ID; the gateway
+  reuses it for its upstream retries and fallback target. Direct model forwards
+  and automation planning log `model_forward_started` with an ID of the same
+  form and an `origin`. Backend run IDs remain separate from opaque provider
+  affinity.

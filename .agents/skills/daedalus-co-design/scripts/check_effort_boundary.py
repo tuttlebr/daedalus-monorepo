@@ -2,8 +2,9 @@
 """Exercise built agent -> gateway -> synthetic judge/provider, without live traffic.
 
 Run with Python 3.11+, --agent-binary, --gateway-binary and --routes. Both binaries
-must run on the same host. Supports Chat provider routes with loopback endpoints.
-No credentials, private prompts, Redis, or Kubernetes access are required.
+must run on the same host. Supports Chat and native Responses provider routes with
+loopback endpoints. No credentials, private prompts, Redis, or Kubernetes access
+are required.
 """
 
 import argparse
@@ -21,6 +22,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+
+PLAN = '{"type":"clarify","message":"Which lights?"}'
+# The gateway's own upstream retry default when a client sets no max_retries.
+GATEWAY_RETRIES = 2
+AGENT_RETRIES = 1
+
 
 def port():
     with socket.socket() as sock:
@@ -41,17 +48,172 @@ def ready(url, process):
     raise RuntimeError("Fixture readiness timed out")
 
 
+def sse(events, named=False):
+    return "".join(
+        (f'event: {event["type"]}\n' if named else "") + f"data: {json.dumps(event)}\n\n"
+        for event in events
+    )
+
+
+def chat_reply(body, malformed):
+    """Return (content type, body, first stream event) for a Chat provider."""
+    has_result = any(m["role"] == "tool" for m in body["messages"])
+    wants_json = (body.get("response_format") or {}).get("type") == "json_object"
+    message = {"role": "assistant", "content": PLAN if wants_json else "BOUNDARY_OK"}
+    finish = "stop"
+    if body.get("tools") and not has_result:
+        message = {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "index": 0,
+                    "id": "call_clock",
+                    "type": "function",
+                    "function": {
+                        "name": "current_datetime_tool",
+                        "arguments": "{invalid" if malformed else "{}",
+                    },
+                }
+            ],
+        }
+        finish = "tool_calls"
+    usage = {"prompt_tokens": 10, "completion_tokens": 1, "total_tokens": 11}
+    envelope = {"id": "chatcmpl-boundary", "created": 1, "model": body["model"]}
+    if not body.get("stream"):
+        for call in message.get("tool_calls", []):
+            del call["index"]
+        reply = {
+            **envelope,
+            "object": "chat.completion",
+            "choices": [{"index": 0, "message": message, "finish_reason": finish}],
+            "usage": usage,
+        }
+        return "application/json", json.dumps(reply), None
+    envelope["object"] = "chat.completion.chunk"
+    opening = {
+        **envelope,
+        "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}],
+    }
+    events = [
+        {**envelope, "choices": [{"index": 0, "delta": message, "finish_reason": None}]},
+        {
+            **envelope,
+            "choices": [{"index": 0, "delta": {}, "finish_reason": finish}],
+            "usage": usage,
+        },
+    ]
+    return "text/event-stream", sse(events) + "data: [DONE]\n\n", sse([opening])
+
+
+def responses_reply(body, malformed):
+    """Return (content type, body, first stream event) for a Responses provider."""
+    items = body["input"] if isinstance(body.get("input"), list) else []
+    has_result = any(item.get("type") == "function_call_output" for item in items)
+    text_format = (body.get("text") or {}).get("format") or {}
+    text = PLAN if text_format.get("type") == "json_object" else "BOUNDARY_OK"
+    use_tool = bool(body.get("tools")) and not has_result
+    if use_tool:
+        arguments = "{invalid" if malformed else "{}"
+        item = {
+            "id": "fc_boundary",
+            "type": "function_call",
+            "status": "completed",
+            "call_id": "call_clock",
+            "name": "current_datetime_tool",
+            "arguments": arguments,
+        }
+    else:
+        item = {
+            "id": "msg_boundary",
+            "type": "message",
+            "role": "assistant",
+            "status": "completed",
+            "content": [{"type": "output_text", "text": text, "annotations": []}],
+        }
+    response = {
+        "id": "resp_boundary",
+        "object": "response",
+        "created_at": 1,
+        "status": "completed",
+        "model": body["model"],
+        "output": [item],
+        "usage": {"input_tokens": 10, "output_tokens": 1, "total_tokens": 11},
+    }
+    if not body.get("stream"):
+        return "application/json", json.dumps(response), None
+    created = {
+        "type": "response.created",
+        "response": {**response, "status": "in_progress", "output": []},
+    }
+    del created["response"]["usage"]
+    events = [created]
+    if use_tool:
+        position = {"item_id": "fc_boundary", "output_index": 0}
+        events += [
+            {
+                "type": "response.output_item.added",
+                "output_index": 0,
+                "item": {**item, "status": "in_progress", "arguments": ""},
+            },
+            {"type": "response.function_call_arguments.delta", **position, "delta": arguments},
+            {
+                "type": "response.function_call_arguments.done",
+                **position,
+                "arguments": arguments,
+            },
+        ]
+    else:
+        position = {"item_id": "msg_boundary", "output_index": 0, "content_index": 0}
+        part = {"type": "output_text", "text": "", "annotations": []}
+        events += [
+            {
+                "type": "response.output_item.added",
+                "output_index": 0,
+                "item": {**item, "status": "in_progress", "content": []},
+            },
+            {"type": "response.content_part.added", **position, "part": part},
+            {"type": "response.output_text.delta", **position, "delta": text},
+            {"type": "response.output_text.done", **position, "text": text},
+            {"type": "response.content_part.done", **position, "part": {**part, "text": text}},
+        ]
+    events += [
+        {"type": "response.output_item.done", "output_index": 0, "item": item},
+        {"type": "response.completed", "response": response},
+    ]
+    for sequence, event in enumerate(events):
+        event["sequence_number"] = sequence
+    return "text/event-stream", sse(events, named=True), sse(events[:1], named=True)
+
+
+def effort(payload):
+    """Provider-native reasoning effort of a Chat or Responses payload/default."""
+    if "reasoning_effort" in payload:
+        return payload["reasoning_effort"]
+    return payload["reasoning"]["effort"]
+
+
+def tool_results(payload):
+    """Call IDs of tool results in a Chat or Responses provider request."""
+    if "messages" in payload:
+        return [m["tool_call_id"] for m in payload["messages"] if m["role"] == "tool"]
+    return [
+        item["call_id"]
+        for item in payload["input"]
+        if isinstance(item, dict) and item.get("type") == "function_call_output"
+    ]
+
+
 def check(agent_binary, gateway_binary, routes_path):
     source = Path(routes_path).read_text()
     config = tomllib.loads(source)
-    if any(
-        client["format"] != "openai_chat"
-        for client in config["llm_clients"].values()
-    ):
-        raise ValueError("Synthetic peer supports only openai_chat provider routes")
+    replies = {"openai_chat": chat_reply, "openai_responses": responses_reply}
+    if any(c["format"] not in replies for c in config["llm_clients"].values()):
+        raise ValueError("Synthetic peer supports Chat and Responses provider routes")
     state = {"providers": [], "judges": 0, "mode": "normal"}
 
     class Peer(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
         def log_message(self, *_args):
             pass
 
@@ -83,68 +245,41 @@ def check(agent_binary, gateway_binary, routes_path):
                         },
                         "usage": {"input_tokens": 10, "output_tokens": 0},
                     }
-                ).encode()
+                )
                 content_type = "application/json"
-            elif self.path == "/v1/chat/completions":
+            elif self.path in ("/v1/chat/completions", "/v1/responses"):
                 state["providers"].append(body)
                 state["call_ids"].append(self.headers.get("x-request-id"))
+                if state["mode"] == "persistent_failure":
+                    self.send_error(503)
+                    return
                 if state["mode"] == "upstream_failure":
                     state["mode"] = "normal"
                     self.send_error(503)
                     return
-                has_result = any(m["role"] == "tool" for m in body["messages"])
-                delta = {"role": "assistant", "content": "BOUNDARY_OK"}
-                finish = "stop"
-                if not has_result:
-                    delta = {
-                        "role": "assistant",
-                        "tool_calls": [
-                            {
-                                "index": 0,
-                                "id": "call_clock",
-                                "type": "function",
-                                "function": {
-                                    "name": "current_datetime_tool",
-                                    "arguments": "{}",
-                                },
-                            }
-                        ],
-                    }
-                    finish = "tool_calls"
+                reply = chat_reply if self.path.endswith("completions") else responses_reply
+                content_type, data, opening = reply(body, state["mode"] == "malformed")
                 if state["mode"] == "malformed":
-                    delta["tool_calls"][0]["function"]["arguments"] = "{invalid"
                     state["mode"] = "normal"
-                envelope = {
-                    "id": "chatcmpl-boundary",
-                    "object": "chat.completion.chunk",
-                    "created": 1,
-                    "model": body["model"],
-                }
-                events = [
-                    {
-                        **envelope,
-                        "choices": [
-                            {"index": 0, "delta": delta, "finish_reason": None}
-                        ],
-                    },
-                    {
-                        **envelope,
-                        "choices": [{"index": 0, "delta": {}, "finish_reason": finish}],
-                        "usage": {
-                            "prompt_tokens": 10,
-                            "completion_tokens": 1,
-                            "total_tokens": 11,
-                        },
-                    },
-                ]
-                data = (
-                    "".join("data: " + json.dumps(event) + "\n\n" for event in events)
-                    + "data: [DONE]\n\n"
-                ).encode()
-                content_type = "text/event-stream"
+                if state["mode"] == "midstream_abort":
+                    # One complete event, then drop the connection without the
+                    # terminating chunk: an upstream transport failure in-stream.
+                    state["mode"] = "normal"
+                    opening = opening.encode()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream")
+                    self.send_header("Transfer-Encoding", "chunked")
+                    self.end_headers()
+                    self.wfile.write(b"%x\r\n%s\r\n" % (len(opening), opening))
+                    self.wfile.flush()
+                    time.sleep(0.05)
+                    self.connection.shutdown(socket.SHUT_RDWR)
+                    self.close_connection = True
+                    return
             else:
                 self.send_error(404)
                 return
+            data = data.encode()
             self.send_response(200)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(data)))
@@ -193,7 +328,7 @@ def check(agent_binary, gateway_binary, routes_path):
                         "model_name": "daedalus",
                         "api_type": "responses",
                         "api_key": "synthetic",
-                        "max_retries": 1,
+                        "max_retries": AGENT_RETRIES,
                     }
                 },
                 "workflow": {
@@ -218,7 +353,21 @@ def check(agent_binary, gateway_binary, routes_path):
             for client in config["llm_clients"].values():
                 if client.get("api_key_env"):
                     env[client["api_key_env"]] = "synthetic"
+            internal = {
+                "Content-Type": "application/json",
+                "x-daedalus-internal-token": "fixture-internal",
+                "x-user-id": "synthetic-user",
+            }
             with (directory / "process.log").open("w+") as log:
+
+                def logged(*needles):
+                    log.flush()
+                    return [
+                        line
+                        for line in (directory / "process.log").read_text().splitlines()
+                        if all(needle in line for needle in needles)
+                    ]
+
                 try:
                     for command, url in [
                         (
@@ -247,6 +396,9 @@ def check(agent_binary, gateway_binary, routes_path):
                         *[(level, "normal") for level in model_routes],
                         (None, "timeout"),
                         ("low", "upstream_failure"),
+                        ("low", "midstream_abort"),
+                        ("low", "persistent_failure"),
+                        (None, "persistent_failure"),
                         ("low", "malformed"),
                         *[
                             (retired, "rejected")
@@ -280,12 +432,7 @@ def check(agent_binary, gateway_binary, routes_path):
                         request = Request(
                             agent_url + "/v1/chat/completions",
                             data=json.dumps(body).encode(),
-                            headers={
-                                "Content-Type": "application/json",
-                                "x-daedalus-internal-token": "fixture-internal",
-                                "x-user-id": "synthetic-user",
-                                "x-daedalus-request-id": f"fixture-{index}",
-                            },
+                            headers={**internal, "x-daedalus-request-id": f"fixture-{index}"},
                         )
                         try:
                             with urlopen(request, timeout=15) as response:
@@ -299,6 +446,31 @@ def check(agent_binary, gateway_binary, routes_path):
                             )
                             assert '"finish_reason":"error"' in text, text
                             assert "Function Start:" not in text, text
+                        elif mode == "persistent_failure":
+                            # Retries multiply: each agent attempt is retried by
+                            # the gateway, and the automatic route then tries
+                            # its fallback target. Pin the combined bound.
+                            assert '"finish_reason":"error"' in text, text
+                            assert "Function Start:" not in text, text
+                            stage = config["routes"]["stage"]
+                            targets = [profile or stage["classifier"]["choices"][choice]["target"]]
+                            if profile is None and stage["default_target"] not in targets:
+                                targets.append(stage["default_target"])
+                            per_attempt = sum(
+                                1
+                                + config["llm_clients"][config["targets"][target]["llm_client"]].get(
+                                    "max_retries", GATEWAY_RETRIES
+                                )
+                                for target in targets
+                            )
+                            assert len(state["providers"]) == (1 + AGENT_RETRIES) * per_attempt, (
+                                profile,
+                                len(state["providers"]),
+                                per_attempt,
+                            )
+                            assert state["judges"] == (
+                                1 + AGENT_RETRIES if profile is None else 0
+                            ), state["judges"]
                         elif mode == "malformed":
                             # A completed provider reply with invalid tool JSON is
                             # rejected before execution; it is not a transport retry.
@@ -313,8 +485,8 @@ def check(agent_binary, gateway_binary, routes_path):
                             assert (
                                 text.count("Function Start: current_datetime_tool") == 1
                             ), text
-                            expected_count = 3 if mode == "upstream_failure" else 2
-                            assert len(state["providers"]) == expected_count, (
+                            failed = mode in ("upstream_failure", "midstream_abort")
+                            assert len(state["providers"]) == (3 if failed else 2), (
                                 profile,
                                 mode,
                                 state,
@@ -329,30 +501,37 @@ def check(agent_binary, gateway_binary, routes_path):
                                     payload["model"]
                                     == config["targets"][target]["model"]
                                 )
-                                assert (
-                                    payload["reasoning_effort"]
-                                    == config["targets"][target]["extra_body"][
-                                        "reasoning_effort"
-                                    ]
+                                assert effort(payload) == effort(
+                                    config["targets"][target]["extra_body"]
                                 )
                             assert state["judges"] == (2 if profile is None else 0), (
                                 state
                             )
-                            history = state["providers"][-1]["messages"]
-                            assert sum(m["role"] == "tool" for m in history) == 1, (
-                                history
+                            assert tool_results(state["providers"][-1]) == ["call_clock"], (
+                                state["providers"][-1]
                             )
-                            assert (
-                                next(m for m in history if m["role"] == "tool")[
-                                    "tool_call_id"
-                                ]
-                                == "call_clock"
-                            )
+                        if mode == "midstream_abort":
+                            # The gateway reports the lost upstream connection as
+                            # an in-stream error; the agent retries only its
+                            # transport envelope, as a new logical call.
+                            assert len(
+                                logged(
+                                    "model_retry_scheduled",
+                                    f"fixture-{index}",
+                                    '"error_kind":"upstream_transport"',
+                                )
+                            ) == 1, logged("model_retry_scheduled", f"fixture-{index}")
                         expected_ids = []
                         run_id = f"fixture-{index}".encode()
+                        # The gateway retries a failed upstream request under
+                        # the caller's ID; only an agent attempt gets a new one.
                         logical_calls = len(state["providers"]) - (
                             1 if mode == "upstream_failure" else 0
                         )
+                        repeats = 1
+                        if mode == "persistent_failure":
+                            logical_calls = 1 + AGENT_RETRIES
+                            repeats = len(state["providers"]) // logical_calls
                         for attempt in range(1, logical_calls + 1):
                             expected_ids.append(
                                 "dc-"
@@ -366,28 +545,13 @@ def check(agent_binary, gateway_binary, routes_path):
                         wire_ids = (
                             expected_ids[:1] + expected_ids
                             if mode == "upstream_failure"
-                            else expected_ids
+                            else [call_id for call_id in expected_ids for _ in range(repeats)]
                         )
                         assert state["call_ids"] == wire_ids, state["call_ids"]
-                        log.flush()
-                        observed_logs = (directory / "process.log").read_text()
                         for call_id in expected_ids:
                             # The same ID occurs in backend model_call_started and gateway spans.
-                            assert (
-                                len(
-                                    [
-                                        line
-                                        for line in observed_logs.splitlines()
-                                        if call_id in line
-                                        and "model_call_started" in line
-                                    ]
-                                )
-                                == 1
-                            )
-                            assert any(
-                                call_id in line and "libsy.run" in line
-                                for line in observed_logs.splitlines()
-                            ), call_id
+                            assert len(logged(call_id, "model_call_started")) == 1
+                            assert logged(call_id, "libsy.run"), call_id
                         print(
                             json.dumps(
                                 {
@@ -400,6 +564,61 @@ def check(agent_binary, gateway_binary, routes_path):
                             ),
                             flush=True,
                         )
+
+                    # A stateless, non-streaming Chat forward on the automatic
+                    # route: the caller's stream choice, JSON mode and an opaque
+                    # correlation ID must survive whichever transport the
+                    # selected provider uses.
+                    state.update(providers=[], call_ids=[], judges=0, mode="normal", choice="low")
+                    request = Request(
+                        agent_url + "/internal/autonomy/plan",
+                        data=json.dumps(
+                            {
+                                "instructions": "Use the game scene at kickoff.",
+                                "context": {"settings": {}},
+                            }
+                        ).encode(),
+                        headers=internal,
+                    )
+                    try:
+                        with urlopen(request, timeout=15) as response:
+                            content_type = response.headers.get("Content-Type", "")
+                            text = response.read().decode()
+                    except HTTPError as error:
+                        raise AssertionError(
+                            ("autonomy_plan", error.code, error.read().decode(), state)
+                        ) from error
+                    assert content_type.startswith("application/json"), content_type
+                    reply = json.loads(text)["choices"][0]
+                    assert reply["finish_reason"] == "stop", reply
+                    assert json.loads(reply["message"]["content"]) == json.loads(PLAN)
+                    assert len(state["providers"]) == 1 and state["judges"] == 1, state
+                    payload = state["providers"][0]
+                    assert not payload.get("stream"), payload
+                    target = config["routes"]["stage"]["classifier"]["choices"]["low"]["target"]
+                    assert payload["model"] == config["targets"][target]["model"]
+                    assert (
+                        payload.get("response_format")
+                        or (payload.get("text") or {}).get("format")
+                    ) == {"type": "json_object"}, payload
+                    (call_id,) = state["call_ids"]
+                    assert re.fullmatch(r"dc-[0-9a-f]{64}", call_id or ""), call_id
+                    assert len(
+                        logged(call_id, "model_forward_started", '"origin":"autonomy_plan"')
+                    ) == 1
+                    assert logged(call_id, "libsy.run"), call_id
+                    print(
+                        json.dumps(
+                            {
+                                "profile": None,
+                                "mode": "autonomy_plan",
+                                "provider_calls": 1,
+                                "classifier_calls": 1,
+                                "passed": True,
+                            }
+                        ),
+                        flush=True,
+                    )
                 except Exception:
                     log.flush()
                     log.seek(0)

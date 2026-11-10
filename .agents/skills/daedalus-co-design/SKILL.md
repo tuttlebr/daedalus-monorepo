@@ -111,9 +111,13 @@ log credentials, or enable prompt/body logging to improve diagnosis.
 ## Implement and compare
 
 Select current tests and built-artifact checks from the contract map. Exercise
-the boundary, not only each repository's mocks. For routing/transport changes,
+the boundary, not only each repository's mocks. When the host lacks a toolchain,
+build the binaries in containers as the contract map describes before treating
+a built check as unavailable. For routing/transport changes,
 cover automatic and affected explicit routes, a tool continuation, and relevant
 classifier timeout, malformed stream, upstream failure or cancellation paths.
+Cover both caller formats (Chat and Responses) and non-streaming callers, not
+only the agent's main streaming call.
 Check combined retry bounds and avoid repeating executed tool side effects.
 For sandbox changes, exercise discovery -> staging -> execution/check -> result
 handling with passing and failing synthetic inputs, including affected timeout,

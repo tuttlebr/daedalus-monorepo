@@ -90,6 +90,31 @@ class ContextBoundaryTest(unittest.TestCase):
         self.assertEqual(template["EMBEDDING_NIM_MODEL_NAME"], rag["embedding"]["model"])
         self.assertEqual(generated["EMBEDDING_NIM_MODEL_NAME"], rag["embedding"]["model"])
 
+    def test_agent_env_template_supplies_every_context_mcp_server(self):
+        """The runtime rejects an empty MCP URL at startup, for any group.
+
+        Use the workflow's own references: a context-owned server it registers
+        must have the generated address in the template, not a blank.
+        """
+        workflow = yaml.safe_load((AGENT / "backend/tool-calling-config.yaml").read_text())
+        template = dict(
+            line.split("=", 1)
+            for line in (AGENT / ".env.template").read_text().splitlines()
+            if "=" in line and not line.startswith("#")
+        )
+        generated = dict(
+            token.split("=", 1)
+            for token in shlex.split(contextctl.agent_env("production"), comments=True)
+        )
+        checked = 0
+        for name, group in workflow["function_groups"].items():
+            reference = re.fullmatch(r"\$\{([A-Z0-9_]+)\}", group["server"]["url"])
+            if reference and reference[1] in generated:
+                with self.subTest(group=name):
+                    self.assertEqual(template.get(reference[1]), generated[reference[1]])
+                checked += 1
+        self.assertGreater(checked, 0, "No context-owned MCP server is registered")
+
 
 if __name__ == "__main__":
     unittest.main()

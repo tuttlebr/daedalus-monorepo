@@ -13,7 +13,7 @@ to improve the system.
 
 | Owner | Responsibility |
 | --- | --- |
-| Agent | Generic six-label schema; only configured profiles may be selected. The classifier has four categories; shipped agent profiles expose four; omission remains automatic. Emit a generated opaque correlation ID with each logical model call in logs and both request-ID headers. New agent loop retries/continuations get new IDs. Transport-internal retries retain that logical ID. Preserve authorization and conversation affinity separately. |
+| Agent | Generic six-label schema; only configured profiles may be selected. The classifier has four categories; shipped agent profiles expose four; omission remains automatic. Emit a generated opaque correlation ID with each model attempt in logs and both request-ID headers. Agent retries and continuations get new IDs; the gateway reuses the caller's ID for its own upstream retries. Preserve authorization and conversation affinity separately. |
 | Switchyard | Consume existing `x-switchyard-request-id`/`x-request-id` metadata, include it in routing spans, and forward the allowlisted request ID upstream. Its existing pinned implementation supports this; no gateway code change is required. |
 | Learner | Send synthetic LAN probes, correlate exact IDs, measure stream completion and deterministic outcomes, propose one classifier-only change, evaluate paired trials and holdout, retain evidence and the best local policy. |
 | Deployment | Verify correlation coverage on the running agent image. Mixed versions still serve requests; absent correlation is an explicit evidence gap. The learner does not deploy, publish, commit, or advance gitlinks. |
@@ -159,9 +159,10 @@ uv run --python 3.12 --no-project python \
 ```
 
 Also run the built agent/gateway `check_effort_boundary.py --routes <selected-file>`
-with both binary arguments. Its synthetic provider supports Chat routes (Fireworks
-and Baseten); native OpenAI Responses transport needs a separate fixture. It verifies logical
-call-ID propagation through tool continuations and transport retry, plus all
-public effort and failure contracts. Reconcile reusable findings into
+with both binary arguments. Its synthetic provider speaks Chat and native
+Responses, so any current provider file can be selected. It verifies call-ID
+propagation through tool continuations, gateway retries and agent retries, the
+combined request count under persistent failure, and all public effort and
+failure contracts. Reconcile reusable findings into
 `references/learning.md` after each run. Candidate acceptance alone is not a
 verified production lesson.

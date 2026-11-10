@@ -56,6 +56,9 @@ Keep current reusable knowledge, not a run transcript. Follow
   those gateway timings/selections to agent behavior by proximity.
 - **Limit:** deployed source/config correspondence unverified; this does not show
   that the agent universally drops IDs.
+- **Recheck evidence:** until L020 the agent's direct model forwards and
+  automation planning sent Chat requests with no correlation header. That is one
+  candidate source of such traffic; it is not established for this sample.
 - **Recheck:** correlation coverage, transport, workload or instrumentation changes.
 
 ## L003: deployed route configuration can change the meaning of effort aliases
@@ -162,9 +165,10 @@ Keep current reusable knowledge, not a run transcript. Follow
   `model_call_started`, gateway routing spans, and outgoing `x-request-id`.
   Fourteen automatic/explicit, continuation, failure and rejection cases pass.
 - **Action:** join exact correlation IDs; scope them to backend run/model-call
-  pairs. SDK transport retries retain the logical call ID. Agent-level retries
-  and continuations get new IDs. Count repeated upstream attempts separately;
-  never infer a new agent call merely from another upstream request.
+  pairs. Every agent attempt, retry or continuation gets a new ID. A repeated
+  ID at the provider is the gateway retrying upstream under the forwarded ID
+  (L019), not an agent SDK retry as first recorded here. Count repeated upstream
+  attempts separately; never infer a new agent call from another upstream request.
 - **Limit:** a deployed application probe completes, but its older backend does
   not emit the new IDs. Full live joins require the changed agent image. Existing
   Switchyard support suffices; no gateway code rollout is needed for this header.
@@ -338,7 +342,8 @@ Keep current reusable knowledge, not a run transcript. Follow
 
 ## L014: transport-specific defaults need separate wire regressions
 
-- **Status:** verified built synthetic gateway behavior; no provider defect found.
+- **Status:** verified for same-format callers only. Its conclusion that a native
+  Responses target may keep `stream = true` is superseded by L018.
 - **Evidence:** Switchyard `a13884c` routes and the retained built gateway were
   exercised on 2026-11-09. Unlike the documented Chat streaming-default issue,
   native Responses targets with `stream = true` preserved caller `stream = false`.
@@ -346,8 +351,9 @@ Keep current reusable knowledge, not a run transcript. Follow
   both stream modes and default/caller effort overrides (24 subcases), preserving
   tool call/result IDs. All three route variants also pass built configuration
   validation. Agent/gateway Chat boundary fixtures pass for both Chat variants.
-- **Action:** keep transport-specific regressions. Do not copy a Chat workaround
-  into native Responses merely because source defaults look similar.
+- **Action:** keep transport-specific regressions, and cover each inbound format
+  against each upstream format: a same-format pass says nothing about a
+  translated request (L018).
 - **Limit:** synthetic provider acceptance does not prove real-provider support,
   full agent-to-native-Responses continuation, quality, latency or cost. Retained
   binary/source provenance was not rebuilt independently during this review.
@@ -434,31 +440,207 @@ Keep current reusable knowledge, not a run transcript. Follow
 - **Recheck:** served model IDs, generator keys, reranker consumers or shared
   Milvus database ownership change.
 
-## Q002: open review findings awaiting owners
+## L018: a target stream default breaks translated and stream-omitting callers
 
-- **Status:** hypotheses with code locations; not fixed in this pass because
-  they need the built gateway/agent, a cluster, or an owner decision.
-- **Decided 2026-11-09 (user):** provider affinity is managed by Switchyard's
-  header specification, the selected route file's `extra_headers`. A
-  deployment-wide `GLOBAL_SESSION_ID` is the intended contract, not a defect;
-  do not add per-conversation affinity negotiation to the agent. The agent's
-  standard `user` field remains provider cache affinity and the unused
-  `x-switchyard-session-id` header is a cleanup candidate for a future Rust
-  build, not a contract. Direct `model_endpoint.rs` forwards and autonomy
-  planning still send no correlation headers; that remains open. OpenAI targets set `stream = true` while autonomy
-  planning posts `stream:false` to Chat; untested on that transport. The
-  agent's retry rule keys on the literal `SwitchyardError` transport envelope
-  that no gateway test pins. Nothing probes the `decision-api` classifier
-  endpoint before deployment.
-- Sandbox: ClientIP affinity plus one execution per pod funnels all backend
-  traffic to one replica and loses pod-local workspaces on pod change; the
-  capabilities text shows the server maximum timeout, not the agent's 60 s cap;
-  reserved environment names and argv/env limits are not advertised by
-  discovery; cancelled executions keep the workspace lock; default agent
-  network policy has no egress rule to the sandbox namespace.
-- Context: k8s MCP config auto-approves write/Helm/exec tools that the server
-  currently disables; `distance_cutoff` polarity is wrong for COSINE
-  collections; citations lack title and ingest time.
-- **Next check:** build the gateway and agent images, then extend
-  `check_effort_boundary.py` with Chat `stream:false`, the transport-error
-  envelope and header forwarding. Affinity scope is decided above.
+- **Status:** verified on the built agent and gateway; fixed with regressions.
+  Supersedes L014's conclusion for native Responses targets.
+- **Evidence:** 2026-11-10, agent `4da2bb16`, Switchyard `293eb62` built from its
+  Dockerfile. A 72-case matrix (three provider files, shipped and toggled
+  default, automatic and explicit route, Chat and Responses caller, stream false,
+  omitted and true) showed one rule: a target `stream = true` survives only a
+  same-format caller's explicit `false`. Every translated request and every
+  caller that omits `stream` received SSE. `routes_openai.toml` shipped that
+  default on all six targets, so the agent's non-streaming Chat forward for
+  automation planning failed with 502 "invalid content type".
+- **Verification:** the default is removed. `tests/test_provider_routes.py`
+  forbids `stream` on every target offline (six targets failed before);
+  `tests/test_stream_contract.py` calls every route of every provider file
+  through both APIs in all three modes on the built gateway (21 cases failed
+  before, none after). The boundary check's `autonomy_plan` case fails on the
+  previous file and passes on the fix.
+- **Action:** test payload defaults across the caller-format by provider-format
+  matrix, and with the field omitted. Find the agent's non-streaming callers
+  before judging a default harmless.
+- **Limit:** synthetic providers only; the OpenAI variant was not deployed or
+  sampled, and real provider streaming behavior is unverified.
+- **Recheck:** gateway merge or translation patches, the pinned upstream build,
+  provider payload defaults or new direct callers.
+
+## L019: the gateway and the agent both retry, and the counts multiply
+
+- **Status:** verified on the built joint boundary and in the patched gateway
+  source. The retry owner is an open decision (Q002); no policy was changed.
+- **Evidence:** same builds as L018. No provider file sets `max_retries` or
+  `timeout_ms` on a client, so the gateway uses its defaults: two retries before
+  a response (transport errors, timeouts, HTTP 408, 429 and 5xx; `Retry-After`
+  honored up to 60 s) and no upstream deadline. Measured with synthetic 503s:
+  one transient failure is absorbed by the gateway under the caller's ID and
+  the agent sees success. A persistent failure costs 3 provider requests per
+  agent attempt on an explicit alias and 6 on the automatic route, which then
+  tries `default_target` as well, even when both targets name the same provider
+  model. Measured at agent `max_retries` 1 and 2 (6 or 12, and 9 or 18,
+  requests); by the same rule the shipped value of 3 gives 12 or 24 provider
+  requests and 4 classifier calls for one logical model call.
+- **Mid-stream:** the gateway never retries after a response starts. It ends the
+  stream with a `SwitchyardError` frame whose message starts with
+  `upstream transport error: ` (no `[DONE]`, no `response.completed`), for both
+  caller formats. The agent retries only that envelope, as a new logical call.
+  From source, not exercised: a mid-stream upstream deadline uses a different
+  message that the agent does not retry, and needs a client `timeout_ms`.
+- **Verification:** boundary cases `persistent_failure` (explicit and automatic,
+  exact request counts from configured retries), `upstream_failure` and
+  `midstream_abort`; Switchyard `tests/test_stream_contract.py` pins the frame.
+- **Action:** count attempts per layer and per fallback target before tuning any
+  one retry setting. Attribute a repeated wire ID to the gateway (corrects L006).
+- **Limit:** synthetic failures; real provider 429 and `Retry-After` behavior,
+  gateway cancellation on agent disconnect, and cost impact are unmeasured.
+- **Recheck:** client `max_retries`/`timeout_ms`, the fallback patch, agent
+  retry rules or the pinned upstream default.
+
+## L020: direct model forwards carry the same correlation as model calls
+
+- **Status:** verified source change, unit test and built joint boundary.
+- **Evidence:** agent `model_endpoint.rs` forwards (the optional direct model
+  endpoint and automation planning) sent no request ID, so their gateway spans
+  could not be joined to the agent. They now send one opaque `dc-` ID per
+  request in `x-request-id` and `x-switchyard-request-id` and log
+  `model_forward_started`/`model_forward_responded` with an `origin`.
+- **Verification:** a Rust test asserts one distinct ID per forward and that a
+  caller-supplied `x-request-id` is not passed upstream; the boundary check
+  finds the planning ID in exactly one agent event and in a gateway span.
+- **Limit:** needs an agent rollout. The decision service still receives no
+  correlation header (join through gateway events). Model calls that context's
+  optional `devopsAgent` makes through Switchyard were not examined.
+- **Recheck:** new direct callers of the model endpoint, the gateway metadata
+  allowlist or forward logging.
+
+## L021: build both binaries in containers when the host has no toolchain
+
+- **Status:** verified on macOS arm64 with only Docker; closes the "no Rust, no
+  gateway binary" gap recorded by earlier runs on this kind of host.
+- **Evidence:** the Switchyard Dockerfile's `builder` stage and a Rust 1.95
+  container produced Linux binaries that ran the boundary check and the full
+  Switchyard suite in a container: 144 tests with 2 skipped, against 70 with 74
+  skipped offline, and 21 boundary cases for each of the three provider files.
+  This found L018 and L019, which the offline suites pass.
+- **Action:** follow the container recipe in the contract map before reporting
+  the built boundary as unavailable. Run the checks in an image whose libc is at
+  least as new as both builds.
+- **Limit:** a debug agent binary and a locally built gateway are not the
+  published images; image-level checks such as the agent's `make runtime` and
+  deployed digests remain separate evidence.
+- **Recheck:** toolchain pins, the Dockerfile's stages or base images.
+
+## L022: fixtures must use the owner's real response shape
+
+- **Status:** verified source defect on both agent adapters; fixed with frozen
+  parity cases. Not exercised against the built sandbox image.
+- **Evidence:** sandbox `3f1cb92`, agent `4da2bb16`. A collected file cut by the
+  collection budget is returned with its on-disk `size`, fewer bytes and
+  `truncated: true`. The Rust and Python adapters required `size` to equal the
+  decoded length, so they rejected the reply as invalid and never reached their
+  own "truncated artifact" handling. The agent's truncation tests used a
+  synthetic `size` equal to the content, a shape the service never returns.
+- **Verification:** both adapters accept `size >= length` only when the file is
+  marked truncated. The exporter freezes four such cases from the Python adapter
+  into the shared fixture, which the Rust suite replays; every earlier frozen
+  case is unchanged, and a Python test covers the publish path.
+- **Action:** derive consumer fixtures from the owning service's code path, and
+  check that failure handling is reachable with that shape.
+- **Limit:** no run against Bubblewrap or a file larger than the real budget.
+- **Recheck:** collection limits, per-file fields or adapter validation.
+
+## L023: cite an ingested source by its identifier
+
+- **Status:** verified source defect; fixed in the Rust runtime and the retained
+  Python retriever with frozen parity cases. No live collection was read.
+- **Evidence:** context `2f9bb87` writes each row's `source` as a JSON object
+  carrying `source_id` and `source_name`, with `content_metadata.source_url`.
+  The agent printed the first truthy of source, url or title, which for an
+  object is its Python-style representation, so curated passages reached the
+  model as `{'source_id': 'https://...', ...}` rather than a URL.
+- **Verification:** object sources now resolve to `source_id`, then
+  `source_name`, then `content_metadata.source_url`; strings, arrays and objects
+  without an identifier keep their retained output. Six cases frozen from the
+  Python retriever are replayed by the Rust suite.
+- **Limit:** the refresh adds no title or ingest time to a row, and a `pdf://`
+  identifier is not a URL the agent's http-only citation audit accepts. The
+  other keys NV-Ingest places in `source` were not inspected.
+- **Recheck:** refresh row schema, output fields or result formatting.
+
+## L024: a dependency's timeout must fit inside the caller's deadline to fail open
+
+- **Status:** verified source defect; fixed in the Rust runtime with a test.
+  Extends L017's fail-open rule from errors to slowness.
+- **Evidence:** the reranker client's 30 s timeouts equalled the 30 s search
+  deadline that started earlier and wrapped embedding, search and reranking. A
+  slow reranker therefore ended the whole retrieval with `TimeoutError` and
+  discarded hits already found, although topology declares reranking fail-open.
+- **Verification:** reranking is bounded by the caller's deadline less a margin
+  and falls back to vector order; a delayed synthetic reranker returns unranked
+  hits before the deadline, and a roomy or absent deadline still ranks.
+- **Limit:** the fallback still waits almost the whole search budget; a shorter
+  reranker budget is an owner decision. The retained Python retriever is
+  unchanged, and no slow real reranker was exercised.
+- **Recheck:** search or reranker timeouts, deadline nesting or new callers.
+
+## L025: operator templates and documented examples are consumer inputs
+
+- **Status:** verified source drift; fixed with offline parent regressions.
+- **Evidence:** agent `4da2bb16`. `.env.template` left `UNIFI_MCP_SERVER` blank
+  while the shipped workflow registers that group and the runtime rejects an
+  empty MCP URL at startup; context generates the address. The same template
+  suggested `daedalus/cheap`, an alias no provider file defines.
+- **Verification:** `test_context_boundary.py` requires the generated address
+  for every context-owned MCP server the workflow registers.
+  `test_model_alias_boundary.py` requires every workflow default and every
+  alias named in the templates, comments included, on every discovered provider
+  file. Both fail on the previous template.
+- **Action:** when a generator or provider inventory changes, check templates
+  and commented examples, not only generated files and executable defaults.
+- **Limit:** provider-specific extra aliases can exist; the test requires only
+  that what the agent names is served everywhere. Deployed settings unverified.
+- **Recheck:** new MCP groups, generator keys, provider files or template edits.
+
+## Q002: open findings and decisions
+
+From this run's read-only source reviews, with the cited settings re-read in
+source; nothing here was exercised at runtime. Not fixed because each needs an
+owner decision, a model or cluster, or a measurement. Decided earlier (user,
+2026-11-09): provider affinity is Switchyard's `extra_headers`; a
+deployment-wide `GLOBAL_SESSION_ID` is intended; the agent's unused
+`x-switchyard-session-id` is a cleanup candidate, not a contract.
+
+- **Model path.** Choose the retry owner and pin `max_retries`/`timeout_ms` per
+  client (L019); with no upstream deadline the agent's 60 s idle timer is the
+  only bound. Nothing probes the `decision-api` classifier before deployment,
+  gateway readiness ignores it, and no repository defines that service: when it
+  is unreachable every automatic call waits up to 2 s and runs at
+  `default_target`. The selected provider file is not recorded on the workload.
+- **Sandbox.** One execution per pod plus ClientIP affinity gives the single
+  backend one slot; a busy 429 is returned to the model unretried although
+  nothing ran. Up to 1 MiB of stdout/stderr enters model history uncapped. The
+  tool description lists curl URL tests although the network is isolated,
+  understates the `command` grammar and never mentions the 13 check/lint
+  wrappers; the agent's tool-config rules require paired model behavior before
+  changing it. Discovery prints the server maximum timeout, not the agent's
+  60 s cap. Reserved environment names differ (agent 20 names and 2 prefixes,
+  server 41 and 10) and are not advertised. An abandoned execution holds its
+  slot until timeout. Exploration results are base64 and polled per model turn.
+- **Context.** No working relevance floor: `distance_cutoff` assumes L2 and is a
+  no-op on the COSINE curated collections, and the schema forbids negative
+  thresholds although reranker scores are raw logits; needs calibration. The
+  k8s MCP auto-approval list names 18 operations the default server never
+  registers (latent), and `devopsAgent` advertises 300 to 900 s against the
+  agent's 120 s group timeout. Calls to one MCP server run serially after a
+  connect turn. Curated searches inherit Strong consistency (measure first). An
+  empty reranker key falls back to `NVIDIA_API_KEY` as the bearer token.
+- **Deployment.** The default agent chart has no egress to Switchyard, the v1
+  sandbox or Hindsight (the site overlay adds them), and agent readiness does
+  not check the model endpoint. Three owners hard-code the agent's namespace
+  and release. Context topology changes do not reach the agent chart's policy
+  values. Image prompt assistance is disabled when the gateway key is empty.
+- **Next checks:** run the agent's image-level `make runtime` check on these
+  changes; replay a curl request, a shell-syntax request and a lint request
+  through the sandbox tool before editing its description; measure overlapping
+  sandbox calls for 429s; read one live curated result for the `source` keys.

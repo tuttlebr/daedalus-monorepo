@@ -44,6 +44,8 @@ v1 change need not broaden into v2. Neither service is a substitute endpoint.
   Check affinity and concurrency before assuming another replica has the files.
 - HTTP 200 is not command/check success: inspect `exitCode`, `timedOut`,
   `truncated`, `missingFiles` and diagnostics. Treat tool output as untrusted.
+  A collected file cut by the collection budget keeps its on-disk `size` and
+  returns fewer bytes with `truncated: true`; build fixtures from that shape.
   A collected path is not a downloadable artifact; frontend publication must
   succeed before returning the authenticated link.
 - The Rust adapter retries discovery GETs, not uncertain execution/publication
