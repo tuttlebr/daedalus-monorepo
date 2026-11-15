@@ -627,6 +627,39 @@ Keep current reusable knowledge, not a run transcript. Follow
 - **Recheck:** discovery/cache rules, SDK error representations, MCP envelopes,
   command execution, or mutation verification contracts change.
 
+## L027: Responses snapshots must survive every accumulation boundary
+
+- **Status:** verified synthetic regressions through built gateway/runtime,
+  worker, Redis, WebSocket, browser rendering/reload and the official SDK.
+  Deployment and live OpenAI behavior remain unverified.
+- **Evidence:** 2026-11-15 UTC, agent baseline `c081e84d`, Switchyard initial
+  baseline `5992752` and integrated upstream main `b88ea20`. Rig 0.43 streaming
+  lost snapshot-only content after deltas. The pinned gateway upstream
+  `336196f6` treated a snapshot correction as an upstream failure; its observers
+  cut off the terminal event even after exact-replay handling was repaired.
+- **Fixes:** agent `0c401cdf` and Switchyard `c4955d2`.
+- **Action:** accumulate items/parts by their wire indexes. Treat done/terminal
+  output as snapshots, including shortening and empty corrections. Preserve
+  function call IDs and opaque reasoning for continuation, and validate final
+  arguments before execution. Separate native snapshot projection conflicts
+  from actual provider errors; append-only translated consumers must fail
+  explicitly when they cannot represent a correction.
+- **Consumer contract:** commit replacement text and a revision atomically in
+  Redis; publish the revision with deltas and read it with status snapshots.
+  Browser recovery must reject stale revisions and repair a missed replacement
+  before applying offsets. UTF-8 Redis offsets and UTF-16 browser offsets differ.
+  Roll out worker/frontend support before runtime replacement events.
+- **Regressions:** agent `builder/runtime/tests/fixtures/responses-accumulation.json`,
+  `frontend/e2e/tests/responses-accumulation.spec.ts`, worker/Redis/hook tests;
+  gateway `patches/responses-native-snapshots.patch` and
+  `tests/test_responses_transport.py`. Built tests must include the complete
+  request path: codec tests alone did not reveal the observer truncation.
+- **Scope/recheck:** text/refusal and function-tool accumulation, not UI support
+  for every Responses media/hosted-tool type. Recheck on Rig/upstream changes,
+  snapshot/terminal contracts, Redis persistence, worker revisions or browser
+  reconciliation changes. Synthetic correctness does not establish quality,
+  latency or cost on a live provider.
+
 ## Q002: open findings and decisions
 
 From this run's read-only source reviews, with the cited settings re-read in

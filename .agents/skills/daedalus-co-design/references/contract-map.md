@@ -15,7 +15,7 @@ validation. Hindsight is an external integration, not a fifth owned submodule.
 | Concern | Agent: `submodules/daedalus-agent` | Gateway: `submodules/daedalus-switchyard` | Joint check |
 | --- | --- | --- | --- |
 | Model intent and aliases | `protocol/model-profile.schema.json`, `backend/tool-calling-config.yaml`, `builder/runtime/src/preparation.rs`, `builder/runtime/src/agent.rs` | every discovered `routes_*.toml` | Resolved caller aliases exist; explicit intent survives default merging; automatic selection stays gateway-owned. |
-| Provider wire/stream | `builder/runtime/src/provider.rs`, `builder/runtime/src/config.rs` | `patches/`, `Dockerfile` | Responses/Chat, terminal SSE, tool schema/results, reasoning history, usage, errors and retries agree on actual built artifacts. |
+| Provider wire/stream | `builder/runtime/src/provider.rs`, `builder/runtime/src/provider/responses.rs`, `builder/runtime/src/config.rs` | `patches/`, `Dockerfile` | Responses/Chat, terminal SSE, tool schema/results, reasoning history, usage, errors and retries agree on actual built artifacts. |
 | Deployment/config | `helm/daedalus/`, `.env.example` | `charts/switchyard/`, `scripts/render_routes.py`, `scripts/deploy.sh` | Service/port, selected routes, environment substitutions, capabilities, image digest and runtime config match. |
 | Request identity | `builder/runtime/src/provider.rs` | Header/transport patches and request logs | Distinguish correlation, run IDs, routing session and standard `user`; verify propagation. Provider affinity is Switchyard's contract, set by the selected route file's `extra_headers`; the agent does not negotiate it per request. |
 | Decision service | Complete model request and tool continuations | Decision patches, `docs/decision-input-limits.md`, `docs/standalone-decision-routing.md` | Input budgeting, media, discovery, deadline and fallback preserve answering-request semantics. |
@@ -116,7 +116,10 @@ and the owning repository's required gates.
 - Parent `scripts/check_effort_boundary.py` (relative to this skill) exercises
   built agent -> gateway -> synthetic classifier/provider using selected route
   defaults and loopback endpoints. Pass `--routes` and both binary paths on a
-  compatible host. The synthetic provider speaks Chat and native Responses, so
+  compatible host. For a composed profile, first flatten the explicitly selected
+  file with Switchyard `scripts/render_routes.py <profile> <temporary-output>
+  --compose-only`, then pass that output to `--routes`. The synthetic provider
+  speaks Chat and native Responses, so
   every current provider file can be selected.
   Covers automatic/explicit routing, tool continuation, classifier timeout,
   a transient upstream failure, a mid-stream upstream abort, the combined
@@ -125,6 +128,13 @@ and the owning repository's required gates.
   correlation ID. A new retry layer or a changed gateway default fails the
   persistent-failure count; update `GATEWAY_RETRIES` only with source evidence.
   It does not validate real provider capabilities, latency, or task quality.
+- Agent `frontend/e2e/tests/responses-accumulation.spec.ts` is the built
+  gateway/runtime -> worker/Redis/WebSocket -> browser and public SDK check.
+  Follow its `frontend/e2e/README.md` with an explicit backend image, gateway
+  binary and native Responses profile. It shares the runtime fixture corpus
+  and checks visible corrections, persisted text, reload, usage and failures.
+  See agent `docs/responses-accumulation.md` for revision semantics and rollout
+  order; old workers cannot consume backend snapshot replacements.
 - Without a local Rust toolchain or on a non-Linux host, build both binaries in
   containers and run the check there. From the Switchyard root,
   `docker build --target builder -t <tag> .` leaves the gateway at
