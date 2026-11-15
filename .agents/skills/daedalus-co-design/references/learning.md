@@ -660,6 +660,36 @@ Keep current reusable knowledge, not a run transcript. Follow
   reconciliation changes. Synthetic correctness does not establish quality,
   latency or cost on a live provider.
 
+## L028: distinguish tool argument encoding from answer format
+
+- **Status:** observed pre-execution schema rejection; verified compatibility
+  recovery with synthetic requests against a built backend. Live recovery is
+  unverified because historical argument contents were not logged.
+- **Evidence:** 2026-11-15 UTC, agent baseline `0c401cdf`, Switchyard `c4955d2`.
+  A daily-summary run rejected two renderer calls because `edition` was a string
+  where an object was required, then selected sourced text fallback. Joined
+  gateway correlation IDs and mounted configuration identify Baseten DeepSeek
+  over Responses. HTTP success did not establish valid tool arguments. The
+  evidence establishes the field type, not whether its contents were JSON.
+- **Fix:** agent `8500085c`.
+- **Action:** separate outer function-argument JSON, nested field types, and
+  final answer format. In native preparation, decode a complete serialized
+  object once only for a locally configured `briefing_renderer`, within its
+  edition byte limit, then apply the unchanged schema and renderer gates.
+  Keep call IDs and original model history; never repair prose, recursively
+  decode, coerce unrelated tools, or skip source/HTML validation.
+- **Regressions:** Rust catalog and agent tests cover single execution, aliases,
+  size/type bounds, invalid nested fields and private-data exclusion.
+  `builder/runtime_http_check.py` checks the advertised object schema, native
+  and serialized editions through the real Python renderer, and bounded
+  invalid-edition fallback. Its reasoning-progress fixture must include content
+  indexes and distinct reasoning/message output indexes.
+- **Limit/recheck:** direct Python inputs and Python preparation stay strict.
+  The image check uses canonical local rendering recovery, not the production
+  sandbox. Recheck tool schema ownership, preparation mode, edition byte limits,
+  provider argument encoding, or renderer validation changes. Do not enable
+  private body logging to diagnose a recurrence.
+
 ## Q002: open findings and decisions
 
 From this run's read-only source reviews, with the cited settings re-read in
