@@ -154,3 +154,26 @@ and the owning repository's required gates.
   and automation planning log `model_forward_started` with an ID of the same
   form and an `origin`. Backend run IDs remain separate from opaque provider
   affinity.
+
+## Kubernetes MCP recovery boundary
+
+The agent owns result interpretation; Context owns Kubernetes resource resolution
+and tool execution. Neither Switchyard nor sandbox owns retries for this path.
+Unqualified resources prefer core Kubernetes APIs, qualified names preserve
+explicit group choice, and ambiguous non-core aliases fail. Tool execution
+failures use MCP `isError`; RPC errors preserve bounded diagnostics in the agent.
+Transport uncertainty still requires a state check, and no client automatically
+replays mutations. A successful delete response means accepted, not absent.
+
+After building the agent backend image and Context's Kubernetes MCP binary, run
+`scripts/check_kubernetes_mcp_boundary.py` (relative to this skill) with
+`--agent-image`, `--server-binary`, and `--report`. It starts both artifacts against
+an isolated API and command fixture, covering core-versus-metrics resolution,
+asynchronous deletion, explicit rejection, command failure/timeout, and a read-only
+request. It uses no production kubeconfig or model endpoint. The agent's
+`builder/runtime_http_check.py` additionally covers legacy RPC rejection through
+both preparation modes. Synthetic continuation checks establish evidence delivery,
+not real-model wording quality or deployed behavior. Server and client changes
+can roll independently: older clients already understand MCP `isError`, while
+new clients retain legacy RPC errors. No endpoint, permission, or schema migration
+is required.

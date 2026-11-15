@@ -602,6 +602,31 @@ Keep current reusable knowledge, not a run transcript. Follow
   that what the agent names is served everywhere. Deployed settings unverified.
 - **Recheck:** new MCP groups, generator keys, provider files or template edits.
 
+## L026: distinguish failed MCP execution from unknown effects
+
+- **Status:** verified source defects and built-service regressions; production
+  rollout and real-model wording are unverified.
+- **Evidence:** 2026-11-15 UTC, agent baseline `484e308f` and context baseline
+  `2f9bb871`. New Go regressions fail on the old source: `pods` resolves to the
+  metrics API, command failures lack `isError`, and handler errors become RPC
+  errors. The agent discards those RPC diagnostics as unconfirmed outcomes.
+- **Fixes:** agent `c081e84d` and context `2113b673`.
+- **Verification:** `resource_resolution_test.go`, handler/result tests,
+  Rust/Python MCP tests, and the agent HTTP check in both preparation modes.
+  `scripts/check_kubernetes_mcp_boundary.py` exercises the built agent and MCP
+  binary against a local API/command fixture, including delayed deletion and
+  partial command failure. The corrected path retains error evidence, never
+  automatically replays calls, and verifies absence after deletion acceptance.
+- **Action:** resolve unqualified Kubernetes resources deterministically across
+  groups; preserve explicit group choice and reject unresolved ambiguity. Keep
+  tool execution errors, RPC errors, and transport uncertainty distinct. An
+  error may follow partial changes; successful submission is not completion.
+- **Limit:** source corrections do not prove which API URL a historical live
+  request used. Audit `status=ok` alone also cannot establish a subprocess exit
+  code or the final resource state. New capture requires the context `.env`.
+- **Recheck:** discovery/cache rules, SDK error representations, MCP envelopes,
+  command execution, or mutation verification contracts change.
+
 ## Q002: open findings and decisions
 
 From this run's read-only source reviews, with the cited settings re-read in
