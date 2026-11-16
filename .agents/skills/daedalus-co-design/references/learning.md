@@ -738,6 +738,52 @@ Keep current reusable knowledge, not a run transcript. Follow
 - **Recheck:** evaluator capabilities, ownership, candidate controls, runtime
   observability or explicit user optimization objectives change.
 
+## L031: three layers serialized same-server MCP reads; overlap follows policy
+
+- **Status:** verified on built agent images and the built context UniFi MCP
+  server. Deployment and live behavior are unverified.
+- **Evidence:** 2026-11-16, agent baseline `b9c9b48f`, context `2113b67`. Every
+  MCP group had one scheduler slot (`Config::tool_concurrency`), dispatch held
+  one session lock per user and group across the remote call, and the session's
+  transport and raw-result capture took one request. Four reads to one server
+  in one model response cost four call latencies; two runs of one user also
+  queued behind each other.
+- **Change (agent `840a0454`):** `function_groups.<group>.max_concurrency` (1 to
+  8, default 1) lets tools whose policy is exactly `read_only` overlap, each on
+  its own session. Every other operation and `__connect` stay exclusive and in
+  proposed order within the group. A refused further session falls back to the
+  first.
+- **User direction:** on 2026-11-16 the user set the bound to 8 on every MCP
+  group in the shipped workflow, replacing the first candidate's UniFi-only
+  opt-in. An agent contract test now requires every group to state it.
+- **Verification:** `scripts/check_mcp_read_overlap.py`, frozen before the
+  candidate, five alternating pairs at 400 ms synthetic latency: four reads
+  1.79 s to 0.47 s (ratio 0.25 to 0.28 in every pair), six reads at bound four
+  2.63 s to 0.85 s, two concurrent runs 3.52 s to 0.85 s. Groups without the
+  opt-in, and an opted-in group whose tools are only auto-approved, stayed at
+  one call in flight (ratio 1.00). A read, write, read, read batch kept the
+  write alone and in order. Result digests, model rounds and call counts were
+  identical across arms; a tool error, RPC error and timeout left siblings
+  intact. `scripts/check_unifi_mcp_boundary.py` with the shipped group and the
+  real server: four site reads 1.63 s to 0.43 s, controller peak four. At the
+  shipped bound of 8 (three alternating pairs each): ten synthetic reads 4.42 s
+  to 0.85 s with eight in flight, and eight UniFi site reads 3.28 s to 0.45 s
+  with a controller peak of eight; every hard check still passed.
+- **Action:** for a tool-phase latency hypothesis, find every serialization
+  layer (scheduler limit, session lock, single-request transport, single-slot
+  result capture) before proposing concurrency. Tie overlap to an explicit
+  policy, not to the heuristic mutation detector, and keep order for the rest.
+- **Limit:** scripted model and synthetic latency. No live server, rate limit,
+  quota or session cap was exercised, and how often production responses batch
+  same-server reads is unmeasured. Only the UniFi server was exercised with
+  overlapping reads; the other enabled servers (Hue, ESPN, X, GitHub, Gmail,
+  Calendar, Docs) were not, so lower a group's bound if its server throttles.
+  The Kubernetes group has no `read_only` overrides, so it stays serial; adding
+  them also changes charter verification (`verification_group_for`) and needs
+  its own experiment. The Python MCP client ignores the bound.
+- **Recheck:** MCP SDK transport, session or lock design, approval-policy
+  semantics, group opt-ins, or a server's session and burst limits change.
+
 ## Q002: open findings and decisions
 
 From this run's read-only source reviews, with the cited settings re-read in
@@ -769,7 +815,9 @@ deployment-wide `GLOBAL_SESSION_ID` is intended; the agent's unused
   k8s MCP auto-approval list names 18 operations the default server never
   registers (latent), and `devopsAgent` advertises 300 to 900 s against the
   agent's 120 s group timeout. Calls to one MCP server run serially after a
-  connect turn. Curated searches inherit Strong consistency (measure first). An
+  connect turn unless the group sets a read-overlap bound (L031; the shipped
+  workflow sets 8 on every group). Kubernetes reads are not policy-marked
+  `read_only`, so they stay serial. Curated searches inherit Strong consistency (measure first). An
   empty reranker key falls back to `NVIDIA_API_KEY` as the bearer token.
 - **Deployment.** The default agent chart has no egress to Switchyard, the v1
   sandbox or Hindsight (the site overlay adds them), and agent readiness does

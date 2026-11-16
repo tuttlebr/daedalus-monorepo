@@ -49,6 +49,7 @@ imports depend on that working directory.
 | Model routing or provider translation causes wasted work or failed continuations | Selected route policy or gateway/agent code candidate | Parent `check_effort_boundary.py` and Switchyard built transport suites, then representative agent tasks with real models; use `co_design_loop.py` only when classifier tuning is the hypothesis |
 | Sandbox setup, discovery, execution or result handling dominates | Agent adapter or sandbox implementation candidate | Passing/failing synthetic execution through the built agent and sandbox, including timeout, workspace isolation and required artifact publication; see `sandbox-contract.md` |
 | Retrieval latency, ranking or evidence quality limits completion | Owning retriever/agent code or selected retrieval configuration | Frozen synthetic corpus/query through the built consumer, with relevant/correct passages, citations, authorization, missing-data and failure behavior; see `context-contract.md` |
+| Tool scheduling makes the tool phase cost the sum of independent calls | Agent scheduler or MCP session candidate image, or a group's `max_concurrency` opt-in | Parent `check_mcp_read_overlap.py` in each arm's image, alternating order, plus the affected real server (`check_unifi_mcp_boundary.py`); identical results, rounds and call counts, exclusive ordered writes |
 
 The tool-correctness harness already offers 25 workflow cases, synthetic catalog
 distractors, alternating arm order, multiple repetitions and route/config hashes.
