@@ -15,8 +15,13 @@ only), once per arm, alternating the order between repetitions:
         --entrypoint python3 <agent-image> /check/check_mcp_read_overlap.py \
         --report /out/<arm>-<repetition>.json
 
-`--bound N` (1 to 8, default 4) sets the overlap bound of the opted-in fixture
-groups; the capacity scenario then proposes N + 2 reads.
+`--bound N` (1 to 16, default 4) sets the overlap bound of the fixture groups
+that state one; the capacity scenario then proposes N + 2 reads. A runtime
+older than the 16 limit rejects a bound above 8 at startup.
+
+Fixture groups: `fx_reads` states the bound, `fx_plain` states 1 and must stay
+serial on every runtime, `fx_unset` omits the key and shows the runtime's
+built-in value, `fx_auto` states the bound but has no read-only tool.
 
 No real model, MCP service, credential or cluster is used. A scripted model
 establishes scheduling and result delivery, not real-model behaviour.
@@ -45,7 +50,8 @@ RUNTIME = "/workspace/daedalus-runtime"
 # group -> (tools exposed, read_only tools, opt-in bound or None, deferred)
 GROUPS = {
     "fx_reads": (["read_item", "write_item"], ["read_item"], BOUND, False),
-    "fx_plain": (["read_item"], ["read_item"], None, False),
+    "fx_plain": (["read_item"], ["read_item"], 1, False),
+    "fx_unset": (["read_item"], ["read_item"], None, False),
     "fx_auto": (["lookup_item"], [], BOUND, False),
     "fx_deferred": (["read_item"], ["read_item"], 3, True),
 }
@@ -79,7 +85,9 @@ SCENARIOS = {
         [read("fx_reads", "a"), read("fx_reads", "hang1"), read("fx_reads", "b")],
         [read("fx_reads", "c")],
     ],
-    "DEFAULT_SERIAL": [[read("fx_plain", i) for i in "abcd"]],
+    "SERIAL": [[read("fx_plain", i) for i in "abcd"]],
+    "UNSET": [[read("fx_unset", i) for i in "abcd"]],
+    "READS16": [[read("fx_reads", i) for i in "abcdefgijklmnopq"]],
     "AUTO_ONLY": [[("fx_auto__lookup_item", {"id": i}) for i in "abcd"]],
     "CROSS_GROUP": [
         [
@@ -106,7 +114,9 @@ def configure(bound):
     for name in ("fx_reads", "fx_auto"):
         tools, read_only, _, deferred = GROUPS[name]
         GROUPS[name] = (tools, read_only, bound, deferred)
-    SCENARIOS["CAP"] = [[read("fx_reads", i) for i in "abcdefghij"[: bound + 2]]]
+    SCENARIOS["CAP"] = [
+        [read("fx_reads", i) for i in "abcdefgijklmnopqstu"[: bound + 2]]
+    ]
 
 
 def value(item):
@@ -384,6 +394,13 @@ class Handler(BaseHTTPRequestHandler):
         self.close_connection = True
 
 
+class Server(ThreadingHTTPServer):
+    """Sixteen sessions connect at once; the default backlog of five drops some."""
+
+    request_queue_size = 128
+    daemon_threads = True
+
+
 def free_port():
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
@@ -494,11 +511,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", required=True)
     parser.add_argument("--runtime", default=RUNTIME)
-    parser.add_argument("--bound", type=int, choices=range(1, 9), default=BOUND)
+    parser.add_argument("--bound", type=int, choices=range(1, 17), default=BOUND)
     args = parser.parse_args()
     if args.bound != BOUND:
         configure(args.bound)
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server = Server(("127.0.0.1", 0), Handler)
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, daemon=True).start()
     agent_port, token = free_port(), uuid.uuid4().hex
@@ -546,7 +563,9 @@ def main():
             "MIXED",
             "ERRORS",
             "TIMEOUT",
-            "DEFAULT_SERIAL",
+            "SERIAL",
+            "UNSET",
+            "READS16",
             "AUTO_ONLY",
             "CROSS_GROUP",
             "CAP",
@@ -631,7 +650,9 @@ def main():
             ),
             "write_ordered": first["end"] <= write["start"]
             and all(o["start"] >= write["end"] for o in later),
-            "default_serial": scenarios["DEFAULT_SERIAL"]["peak_in_flight"] == {"fx_plain": 1},
+            "explicit_serial": scenarios["SERIAL"]["peak_in_flight"] == {"fx_plain": 1},
+            "unset_within_run_cap": scenarios["UNSET"]["peak_in_flight"]["fx_unset"] <= 16,
+            "reads16_within_bound": scenarios["READS16"]["peak_in_flight"]["fx_reads"] <= BOUND,
             "auto_only_serial": scenarios["AUTO_ONLY"]["peak_in_flight"] == {"fx_auto": 1},
             "cross_group_plain_serial": scenarios["CROSS_GROUP"]["peak_in_flight"].get("fx_plain") == 1,
             "cap_within_bound": scenarios["CAP"]["peak_in_flight"]["fx_reads"] <= BOUND,

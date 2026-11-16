@@ -748,14 +748,17 @@ Keep current reusable knowledge, not a run transcript. Follow
   transport and raw-result capture took one request. Four reads to one server
   in one model response cost four call latencies; two runs of one user also
   queued behind each other.
-- **Change (agent `840a0454`):** `function_groups.<group>.max_concurrency` (1 to
-  8, default 1) lets tools whose policy is exactly `read_only` overlap, each on
-  its own session. Every other operation and `__connect` stay exclusive and in
-  proposed order within the group. A refused further session falls back to the
-  first.
+- **Change (agent `840a0454`):** `function_groups.<group>.max_concurrency` (then
+  1 to 8, default 1) lets tools whose policy is exactly `read_only` overlap,
+  each on its own session. Every other operation and `__connect` stay exclusive
+  and in proposed order within the group. A refused further session falls back
+  to the first.
 - **User direction:** on 2026-11-16 the user set the bound to 8 on every MCP
   group in the shipped workflow, replacing the first candidate's UniFi-only
-  opt-in. An agent contract test now requires every group to state it.
+  opt-in, then raised every limit to 16 (agent `7845a280`): the per-run cap,
+  the accepted range and the unset fallback for MCP groups, webscrape and the
+  source verifier, and every shipped value. A group or tool is now serial only
+  when it states 1. An agent contract test requires the shipped values.
 - **Verification:** `scripts/check_mcp_read_overlap.py`, frozen before the
   candidate, five alternating pairs at 400 ms synthetic latency: four reads
   1.79 s to 0.47 s (ratio 0.25 to 0.28 in every pair), six reads at bound four
@@ -768,11 +771,21 @@ Keep current reusable knowledge, not a run transcript. Follow
   real server: four site reads 1.63 s to 0.43 s, controller peak four. At the
   shipped bound of 8 (three alternating pairs each): ten synthetic reads 4.42 s
   to 0.85 s with eight in flight, and eight UniFi site reads 3.28 s to 0.45 s
-  with a controller peak of eight; every hard check still passed.
+  with a controller peak of eight; every hard check still passed. At 16 on
+  the `7845a280` build: sixteen synthetic reads 0.92 s at bound 8 to 0.54 s at
+  bound 16, eighteen reads capped at sixteen in flight, a group that omits the
+  key overlapping where the previous runtime ran it in turn, and sixteen UniFi
+  site reads in 0.49 s with a controller peak of sixteen (five runs). The
+  agent's built-image leaf check passes with unset scrape and verifier limits.
 - **Action:** for a tool-phase latency hypothesis, find every serialization
   layer (scheduler limit, session lock, single-request transport, single-slot
   result capture) before proposing concurrency. Tie overlap to an explicit
   policy, not to the heuristic mutation detector, and keep order for the rest.
+  Changing a fallback changes every configuration that omits the key: three
+  tests and fixtures that checked queued calls relied on the old fallback of
+  one and now state it. Size fixture peers for the concurrency under test: a
+  Python `socketserver` backlog of five delayed one of sixteen simultaneous
+  connections by a one-second retransmit, which looked like a slow call.
 - **Limit:** scripted model and synthetic latency. No live server, rate limit,
   quota or session cap was exercised, and how often production responses batch
   same-server reads is unmeasured. Only the UniFi server was exercised with
@@ -780,7 +793,10 @@ Keep current reusable knowledge, not a run transcript. Follow
   Calendar, Docs) were not, so lower a group's bound if its server throttles.
   The Kubernetes group has no `read_only` overrides, so it stays serial; adding
   them also changes charter verification (`verification_group_for`) and needs
-  its own experiment. The Python MCP client ignores the bound.
+  its own experiment. The Python MCP client ignores the bound. Sixteen
+  concurrent source checks are sixteen concurrent model calls; their
+  provider-side effect is unmeasured. Further MCP sessions use a separate pool
+  of 512 connections; beyond it a read waits for the user's first session.
 - **Recheck:** MCP SDK transport, session or lock design, approval-policy
   semantics, group opt-ins, or a server's session and burst limits change.
 
@@ -815,8 +831,8 @@ deployment-wide `GLOBAL_SESSION_ID` is intended; the agent's unused
   k8s MCP auto-approval list names 18 operations the default server never
   registers (latent), and `devopsAgent` advertises 300 to 900 s against the
   agent's 120 s group timeout. Calls to one MCP server run serially after a
-  connect turn unless the group sets a read-overlap bound (L031; the shipped
-  workflow sets 8 on every group). Kubernetes reads are not policy-marked
+  connect turn unless their tool is policy-marked `read_only` (L031; the bound
+  is 16 unless the group states less). Kubernetes reads are not marked
   `read_only`, so they stay serial. Curated searches inherit Strong consistency (measure first). An
   empty reranker key falls back to `NVIDIA_API_KEY` as the bearer token.
 - **Deployment.** The default agent chart has no egress to Switchyard, the v1

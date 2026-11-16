@@ -7,7 +7,8 @@ fixed latency and a throwaway certificate; the model is scripted: connect, list
 sites, then site-scoped reads in one response: as many as the group's
 `max_concurrency`, and at least four. It checks that every read returns its
 own controller data and that the controller never sees more overlapping reads
-than that bound (one when unset), and it reports the time the reads took.
+than that bound (the runtime's 16 when unset), and it reports the time the
+reads took.
 
 Run it inside the agent image under test (the image supplies Python, PyYAML and
 cryptography), loopback only:
@@ -212,6 +213,13 @@ class Model(BaseHTTPRequestHandler):
         self.close_connection = True
 
 
+class Server(ThreadingHTTPServer):
+    """Sixteen sessions connect at once; the default backlog of five drops some."""
+
+    request_queue_size = 128
+    daemon_threads = True
+
+
 def free_port():
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
@@ -288,19 +296,19 @@ def main():
         "group": workflow["function_groups"]["unifi_mcp_server"],
         "authentication": workflow["authentication"]["unifi_mcp_server"],
     }
-    bound = int(shipped["group"].get("max_concurrency", 1))
+    bound = int(shipped["group"].get("max_concurrency", 16))
     names = list(READS)
     BATCH.extend((names[i % len(names)], i // len(names)) for i in range(max(4, bound)))
     directory = tempfile.mkdtemp(prefix="unifi-joint-")
     args.cert, args.key = certificate(directory)
 
-    controller = ThreadingHTTPServer(("127.0.0.1", 0), Controller)
+    controller = Server(("127.0.0.1", 0), Controller)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(args.cert, args.key)
     controller.socket = context.wrap_socket(controller.socket, server_side=True)
     controller.daemon_threads = True
     threading.Thread(target=controller.serve_forever, daemon=True).start()
-    model = ThreadingHTTPServer(("127.0.0.1", 0), Model)
+    model = Server(("127.0.0.1", 0), Model)
     model.daemon_threads = True
     threading.Thread(target=model.serve_forever, daemon=True).start()
 

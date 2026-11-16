@@ -183,20 +183,27 @@ merely to validate a skill edit.
 
 The agent owns scheduling; each MCP server owns its tolerance for sessions and
 request bursts. Within one model response an MCP group runs its calls in
-proposed order, one at a time. A group can set `max_concurrency` (1 to 8) to
-overlap tools whose configured policy is exactly `read_only`; each overlapping
+proposed order. Its `max_concurrency` (1 to 16; 16 when unset) bounds how many
+tools whose configured policy is exactly `read_only` overlap; each overlapping
 call uses its own session for that user, and every other operation, including
 `__connect`, still runs alone. The heuristic mutation detector does not grant
-overlap. Older runtimes and the Python MCP client ignore the key and stay
-serial, so the image and the workflow can roll out or back independently.
-The shipped workflow sets 8 on every group by user direction; only the UniFi
-server has been exercised with overlapping reads. Lower a group's bound when
-its server throttles request bursts or limits sessions per client.
+overlap. One run executes at most 16 tool calls at once, and the webscrape and
+source-verifier tools take the same `max_concurrency` range and fallback. A
+group or tool stays serial only when it states 1. The Python MCP client ignores
+the key and stays serial.
+
+Mixed versions: runtimes before agent `840a0454` ignore a group's key;
+`840a0454` and earlier reject any `max_concurrency` above 8 at startup, for
+groups and for the two tools. Roll the image and the workflow out and back
+together. The shipped workflow states 16 on every group and both tools by user
+direction; only the UniFi server has been exercised with overlapping reads.
+Lower a group's bound when its server throttles bursts or limits sessions.
 
 `scripts/check_mcp_read_overlap.py` (relative to this skill) runs inside an
 agent image with networking disabled and checks ordering, exclusivity, bounds,
 result binding and error/timeout isolation against a synthetic server, reporting
-tool-phase time for paired comparisons; `--bound` selects the fixture bound.
+tool-phase time for paired comparisons; `--bound` (1 to 16) selects the fixture
+bound, and its groups cover a stated bound, a stated 1 and an unset key.
 `scripts/check_unifi_mcp_boundary.py` runs the shipped `unifi_mcp_server` group
 against the built Context UniFi server and a fixture controller, proposing as
 many site reads as the group's bound. Both use a scripted model: they establish
