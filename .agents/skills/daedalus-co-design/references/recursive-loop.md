@@ -52,6 +52,12 @@ actual provider variant explicitly; the example uses Fireworks. Do not select
 a provider by glob order or maintain an exhaustive provider list. Source/live mismatch invalidates
 provider-effort comparisons even when public aliases match.
 
+The runner composes the selected profile's includes through Switchyard's own
+renderer before validation and snapshots the standalone result. Header environment
+references remain unresolved; production credentials are not needed by the isolated
+gateway. The snapshot hash covers included policy, model and decision configuration.
+Do not pass a raw include-only file to a helper that expects standalone TOML.
+
 The gateway URL must point at the intended LAN NodePort. The application URL
 exercises nginx, compatibility API authentication, queue, worker, backend and
 routing. The compatibility API accepts `daedalus` only; configured explicit profile probes
@@ -90,7 +96,10 @@ after the experiment. It is not a production configuration change.
 
 Each isolated gateway retains source target defaults, maps each of its configured target models to
 the corresponding explicit `daedalus/<profile>` LAN alias, and sends answering
-requests through a streaming recording relay to the NodePort. The real decision
+requests through a streaming recording relay to the NodePort. The relay preserves
+Chat or Responses transport and records both top-level and nested reasoning effort.
+The isolated process receives synthetic values for the selected clients' credential
+variable names; incoming authorization is never forwarded by the relay. The real decision
 service classifies each request and continuation. Outgoing profile/effort and
 exact-ID classifier events are checked. This records the payload submitted to
 the LAN gateway, not an independently observed provider-internal configuration.
@@ -157,6 +166,9 @@ Run offline checks with:
 uv run --python 3.12 --no-project python \
   .agents/skills/daedalus-co-design/scripts/test_co_design_loop.py
 ```
+
+Set `SWITCHYARD_TEST_BINARY` to run the additional isolated startup check for every
+discovered provider. Without it, that built check is explicitly skipped.
 
 Also run the built agent/gateway `check_effort_boundary.py --routes <selected-file>`
 with both binary arguments. Its synthetic provider speaks Chat and native

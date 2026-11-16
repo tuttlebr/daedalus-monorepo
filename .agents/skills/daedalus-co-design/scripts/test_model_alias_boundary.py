@@ -12,6 +12,8 @@ from pathlib import Path
 
 import yaml
 
+from route_source import compose_routes
+
 ROOT = Path(__file__).resolve().parents[4]
 AGENT = ROOT / "submodules/daedalus-agent"
 GATEWAY = ROOT / "submodules/daedalus-switchyard"
@@ -24,7 +26,7 @@ def providers():
     if not paths:
         raise AssertionError("No provider route configurations discovered")
     return {
-        path.name: {route["id"] for route in tomllib.loads(path.read_text())["routes"].values()}
+        path.name: {route["id"] for route in tomllib.loads(compose_routes(path))["routes"].values()}
         for path in paths
     }
 

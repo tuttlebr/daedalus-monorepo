@@ -27,6 +27,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from route_source import compose_routes
+
 ROOT = Path(__file__).resolve().parents[4]
 PROFILE_LEVELS = ("max", "xhigh", "high", "medium", "low", "instant")
 CLASSIFICATIONS = ("max", "high", "low", "instant")
@@ -315,7 +317,9 @@ class Relay:
                         self.send_error(403)
                         return
                     size = int(self.headers.get("Content-Length", "0"))
-                    if not 0 < size <= MAX_BYTES or self.path != "/v1/chat/completions":
+                    if not 0 < size <= MAX_BYTES or self.path not in (
+                        "/v1/chat/completions", "/v1/responses"
+                    ):
                         self.send_error(400)
                         return
                     body = json.loads(self.rfile.read(size))
@@ -324,7 +328,9 @@ class Relay:
                         {
                             "call_id": call_id,
                             "model": body.get("model"),
-                            "reasoning_effort": body.get("reasoning_effort"),
+                            "reasoning_effort": body.get("reasoning_effort")
+                            or (body.get("reasoning") or {}).get("effort"),
+                            "api_path": self.path,
                         }
                     )
                     budget.take()
@@ -355,7 +361,7 @@ class Relay:
                         self.wfile.flush()
 
                     wire(
-                        upstream.rstrip("/") + "/chat/completions",
+                        upstream.rstrip("/") + self.path.removeprefix("/v1"),
                         body,
                         headers,
                         min(timeout, budget.remaining()),
@@ -443,9 +449,15 @@ def gateway(binary, source, directory, budget, container_image=None):
         env = {
             "PATH": os.environ.get("PATH", ""),
             "RUST_LOG": "info",
-            "FIREWORKS_API_KEY": "probe-no-provider-secret",
-            "OPENAI_API_KEY": "probe-no-provider-secret",
         }
+        # The relay never forwards provider credentials. Discover variable names
+        # from this profile so new providers need no hard-coded environment list.
+        provider_env = {
+            client["api_key_env"]: "probe-no-provider-secret"
+            for client in tomllib.loads(source)["llm_clients"].values()
+            if client.get("api_key_env")
+        }
+        env.update(provider_env)
         container_name = "codesign-gateway-" + uuid.uuid4().hex[:12]
         command = [
             binary,
@@ -471,10 +483,7 @@ def gateway(binary, source, directory, budget, container_image=None):
                 f"{Path(binary).resolve()}:/probe/switchyard:ro",
                 "-e",
                 "RUST_LOG=info",
-                "-e",
-                "FIREWORKS_API_KEY=probe-no-provider-secret",
-                "-e",
-                "OPENAI_API_KEY=probe-no-provider-secret",
+                *(arg for key, value in provider_env.items() for arg in ("-e", key + "=" + value)),
                 "--entrypoint",
                 "/probe/switchyard",
                 container_image,
@@ -1049,7 +1058,7 @@ def main():
             endpoint(url)
     key = secret(args.api_key_file)
     cases = load_cases(args.cases)
-    source = args.routes.read_text()
+    source = compose_routes(args.routes)
     choices = tomllib.loads(source)["routes"]["stage"]["classifier"]["choices"]
     if set(choices) != set(CLASSIFICATIONS):
         parser.error("align the selected classifier to max, high, low, instant before optimization")
@@ -1064,6 +1073,7 @@ def main():
         "run_id": run_id,
         "started_utc": datetime.now(UTC).isoformat(),
         "source_sha256": digest(source),
+        "selected_routes": str(args.routes.resolve()),
         "suite_sha256": digest(args.cases.read_bytes()),
         "bounds": {
             k: getattr(args, k)
@@ -1205,7 +1215,7 @@ def main():
         report["accepted_candidates"] = sum(r["accepted"] for r in history)
         report["capture"] = capture(args.context, directory)
         report["correlation"] = correlate(report["capture"]["path"], all_rows)
-        if not any(r["joined"] for r in report["correlation"]):
+        if args.app_url and not any(r["joined"] for r in report["correlation"]):
             report["gaps"].append(
                 "no_exact_backend_to_gateway_join; changed_agent_may_need_rollout"
             )

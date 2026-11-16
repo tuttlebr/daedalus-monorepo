@@ -155,6 +155,10 @@ and the owning repository's required gates.
 - Parent `scripts/test_model_alias_boundary.py` requires every alias the agent
   workflow defaults to, or its templates name (comments included), on every
   discovered provider file. Run with Python 3.12 and PyYAML. Offline only.
+- Parent `scripts/route_source.py` delegates include composition to Switchyard's
+  `scripts/render_routes.py`. The alias regression and recursive learner consume
+  this standalone snapshot; they must not parse an include-only entrypoint as a
+  complete routing policy. Private header environment values remain unresolved.
 - Parent `scripts/co_design_loop.py` and `scripts/test_co_design_loop.py` implement
   bounded recursive live policy trials, secure application probes, exact-ID
   log joins and deterministic quality/holdout gates. See `recursive-loop.md`.

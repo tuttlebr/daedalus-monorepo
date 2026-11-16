@@ -23,6 +23,10 @@ embedding and component-lock contracts, environment policies, schemas and root
 orchestration sources are hashed too. Private `.env` files, corpus contents and
 generated credential material are not source-fingerprint inputs.
 
+Switchyard fingerprints include both `routes_*.toml` entrypoints and their
+`config/**/*.toml` fragments. An unchanged include-only entrypoint does not mean
+the classifier or provider configuration is unchanged.
+
 For information-layer issues, read [context-contract.md](context-contract.md)
 and the context repository's `AGENTS.md`. Before context cluster access, source
 its root `.env` with export enabled and set an approved literal `EXPECTED_CONTEXT`;

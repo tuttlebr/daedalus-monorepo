@@ -133,6 +133,21 @@ class CaptureTest(unittest.TestCase):
             for file in directory.iterdir():
                 self.assertNotIn("must-not-persist", file.read_text())
 
+    def test_route_fragment_changes_are_in_source_fingerprints(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            gateway = root / "submodules/daedalus-switchyard"
+            fragment = gateway / "config/routing/policy.toml"
+            fragment.parent.mkdir(parents=True)
+            fragment.write_text('schema_version = 1\n')
+            (gateway / ".env").write_text("PRIVATE=must-not-persist\n")
+            _, _, before, _ = self.run_capture(root, [pod("switchyard-a")])
+            fragment.write_text('schema_version = 2\n')
+            _, _, after, _ = self.run_capture(root, [pod("switchyard-a")])
+            key = str(fragment.relative_to(root))
+            self.assertNotEqual(before["source_sha256"][key], after["source_sha256"][key])
+            self.assertNotIn(str((gateway / ".env").relative_to(root)), after["source_sha256"])
+
     def test_bounds_and_missing_scope_are_not_passes(self):
         for pods, extra, expected in (
             ([], (), "No matching pods"),

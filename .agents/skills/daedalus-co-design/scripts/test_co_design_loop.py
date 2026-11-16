@@ -1,6 +1,7 @@
 """Deterministic tests of recursive feedback, evaluation gates and secret boundaries."""
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,7 +9,7 @@ from pathlib import Path
 import co_design_loop as loop
 
 ROUTES = sorted((loop.ROOT / "submodules/daedalus-switchyard").glob("routes_*.toml"))
-SOURCE = ROUTES[0].read_text()  # Offline fixture only; live runs require --routes.
+SOURCE = loop.compose_routes(ROUTES[0])  # Offline fixture only; live runs require --routes.
 
 
 def row(correct=True, seconds=10, tokens=10, route=True):
@@ -23,11 +24,87 @@ def row(correct=True, seconds=10, tokens=10, route=True):
 
 
 class LoopTests(unittest.TestCase):
+    def test_composition_snapshots_includes_without_rendering_or_writing_sources(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "parts").mkdir()
+            fragment = root / "parts/client.toml"
+            fragment.write_text(
+                '[llm_clients.synthetic]\nbase_url = "http://localhost/v1"\n'
+                'extra_headers = { affinity = "${PRIVATE_AFFINITY}" }\n'
+            )
+            profile = root / "routes.toml"
+            original = 'include = ["parts/client.toml"]\nschema_version = 1\n'
+            profile.write_text(original)
+            first = loop.compose_routes(profile)
+            self.assertNotIn("include", loop.tomllib.loads(first))
+            self.assertIn("${PRIVATE_AFFINITY}", first)
+            fragment.write_text(fragment.read_text().replace("localhost", "127.0.0.1"))
+            self.assertNotEqual(loop.digest(first), loop.digest(loop.compose_routes(profile)))
+            self.assertEqual(profile.read_text(), original)
+            fragment.write_text('include = ["../routes.toml"]\n')
+            with self.assertRaisesRegex(ValueError, "include cycle"):
+                loop.compose_routes(profile)
+
+    @unittest.skipUnless(os.environ.get("SWITCHYARD_TEST_BINARY"), "requires built gateway")
+    def test_every_provider_starts_with_isolated_synthetic_credentials(self):
+        for path in ROUTES:
+            with self.subTest(provider=path.name), tempfile.TemporaryDirectory() as directory:
+                source = loop.sandbox_routes(
+                    loop.compose_routes(path), "http://127.0.0.1:1/v1", "http://127.0.0.1:2/v1"
+                )
+                with loop.gateway(
+                    os.environ["SWITCHYARD_TEST_BINARY"], source, Path(directory), loop.Budget(1, 25)
+                ) as url:
+                    self.assertTrue(url.startswith("http://127.0.0.1:"))
+
+    def test_native_responses_relay_preserves_wire_and_strips_credentials(self):
+        import threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        seen = []
+        payload = b'event: response.completed\ndata: {"type":"response.completed"}\n\n'
+
+        class Peer(BaseHTTPRequestHandler):
+            def log_message(self, *_):
+                pass
+
+            def do_POST(self):
+                seen.append((self.path, dict(self.headers), json.loads(self.rfile.read(int(self.headers["Content-Length"])))))
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+        peer = ThreadingHTTPServer(("127.0.0.1", 0), Peer)
+        thread = threading.Thread(target=peer.serve_forever, daemon=True)
+        thread.start()
+        try:
+            body = {"model": "daedalus/low", "input": "Synthetic", "reasoning": {"effort": "medium"}}
+            with loop.Relay(f"http://127.0.0.1:{peer.server_port}/v1", loop.Budget(1, 5), 2) as relay:
+                status, _, data = loop.wire(
+                    relay.url + "/responses", body,
+                    {"x-probe-relay-token": relay.token, "Authorization": "Bearer private", "x-request-id": "native-probe"}, 2,
+                )
+                self.assertEqual((status, data), (200, payload))
+                self.assertEqual(seen[0][0], "/v1/responses")
+                self.assertEqual(seen[0][2], body)
+                headers = {key.lower(): value for key, value in seen[0][1].items()}
+                self.assertNotIn("authorization", headers)
+                self.assertNotIn("x-probe-relay-token", headers)
+                self.assertEqual(headers["x-switchyard-request-id"], "native-probe")
+                self.assertEqual(relay.records[0]["reasoning_effort"], "medium")
+        finally:
+            peer.shutdown()
+            peer.server_close()
+            thread.join(timeout=2)
+
     def test_every_provider_supports_the_classifier_edit_contract(self):
         self.assertTrue(ROUTES)
         for path in ROUTES:
             with self.subTest(provider=path.name):
-                source = path.read_text()
+                source = loop.compose_routes(path)
                 before = loop.tomllib.loads(source)
                 self.assertEqual(set(before["routes"]["stage"]["classifier"]["choices"]), set(loop.CLASSIFICATIONS))
                 for level in loop.CLASSIFICATIONS:
@@ -285,10 +362,10 @@ class LoopTests(unittest.TestCase):
         for path in ROUTES:
             with self.subTest(provider=path.name):
                 source = loop.sandbox_routes(
-                    path.read_text(), "http://localhost:123/v1", "http://localhost:456/v1"
+                    loop.compose_routes(path), "http://localhost:123/v1", "http://localhost:456/v1"
                 )
                 config = loop.tomllib.loads(source)
-                self.assertEqual(set(config["targets"]), set(loop.tomllib.loads(path.read_text())["targets"]))
+                self.assertEqual(set(config["targets"]), set(loop.tomllib.loads(loop.compose_routes(path))["targets"]))
                 for level in config["targets"]:
                     self.assertEqual(config["targets"][level]["model"], "daedalus/" + level)
                 for client in config["llm_clients"].values():

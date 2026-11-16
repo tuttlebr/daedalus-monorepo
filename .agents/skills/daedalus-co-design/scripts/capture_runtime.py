@@ -124,6 +124,7 @@ def main():
             manifest["gaps"].append(f"Source provenance unavailable: {name}")
     files = [ROOT / "submodules/daedalus-agent/backend/tool-calling-config.yaml"]
     files.extend(sorted((ROOT / "submodules/daedalus-switchyard").glob("routes_*.toml")))
+    files.extend(sorted((ROOT / "submodules/daedalus-switchyard/config").rglob("*.toml")))
     files.extend(ROOT / "submodules/daedalus-sandbox" / name for name in (
         "sandbox_server.py", "tooling/verify.py", "tooling/install.py", "Dockerfile",
         "charts/llm-sandbox/values.yaml",

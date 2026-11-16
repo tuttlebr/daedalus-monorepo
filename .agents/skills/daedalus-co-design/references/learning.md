@@ -690,6 +690,31 @@ Keep current reusable knowledge, not a run transcript. Follow
   provider argument encoding, or renderer validation changes. Do not enable
   private body logging to diagnose a recurrence.
 
+## L029: route composition and provider transport reach the optimization tools
+
+- **Status:** verified parent-tool defect and repair; production policy unchanged.
+- **Evidence:** 2026-11-16, parent `4d22b2e`, Switchyard `c4955d2`, agent
+  `e144752`, context `2113b67`, sandbox `3f1cb92`. All five provider entrypoints
+  use includes. The learner and alias regression parsed them as complete TOML;
+  the learner suite failed before traffic. Its relay also accepted only Chat,
+  and isolated gateway credentials were hard-coded to two providers.
+- **Action:** compose selected files through the owner's renderer, snapshot and
+  hash the composed source, fingerprint included fragments, discover credential
+  variable names, and preserve each provider's Chat/Responses transport. Supply
+  only dummy provider credentials to isolated gateways; never relay authorization.
+- **Verification:** nested-include/snapshot, credential-stripping Responses relay,
+  all-provider classifier-edit and built startup regressions; 21 built Baseten
+  agent/gateway boundary cases; 156 Switchyard checks. A bounded live Baseten
+  trial completed 16 requests through the real classifier and gateway, including
+  tool continuation. Source/live parsed configuration matched; runtime hashes
+  were stable. All five direct probes and all eight development answers passed.
+- **Limit:** candidate routing passed 3/4 cases and was rejected before holdout.
+  No quality, latency or cost improvement is established. Authenticated app
+  traffic was not probed because its dedicated key file was unavailable; this
+  is not evidence that the running agent needs a correlation rollout.
+- **Recheck:** include composition, credential discovery, provider format,
+  reasoning encoding, relay authentication or classifier/fixture contracts change.
+
 ## Q002: open findings and decisions
 
 From this run's read-only source reviews, with the cited settings re-read in
