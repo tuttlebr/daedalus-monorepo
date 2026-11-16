@@ -90,6 +90,14 @@ source-change authorization alone is not an instruction to execute deployment.
 Read owning instructions, Makefiles and CLI options first. Choose focused checks
 and the owning repository's required gates.
 
+For optimization, use [experiment selection](optimization-loop.md) to match the
+hypothesis to an evaluator. Agent `evaluation/tool-correctness/run.py` compares
+real backend images or allowed workflow overlays through a real model and
+isolated tools. `builder/migration/research_workflow_check.py` compares evidence
+compaction/recovery through multi-stage tasks. These complement deterministic
+boundary checks and the specialized classifier runner; they are not invoked
+merely to validate a skill edit.
+
 - Agent: provider unit tests, `builder/runtime_http_check.py` for actual Rust
   binary/image HTTP checks, `scripts/smoke_model_routing.py` for provider
   compatibility, `docs/rust-migration.md`, and `protocol/` for UI/runtime types.
@@ -161,7 +169,9 @@ and the owning repository's required gates.
   complete routing policy. Private header environment values remain unresolved.
 - Parent `scripts/co_design_loop.py` and `scripts/test_co_design_loop.py` implement
   bounded recursive live policy trials, secure application probes, exact-ID
-  log joins and deterministic quality/holdout gates. See `recursive-loop.md`.
+  log joins and deterministic quality/holdout gates. See `recursive-loop.md` for
+  this classifier-specific helper and `optimization-loop.md` for the broader
+  agent-directed implementation and rollout cycle.
 - Agent `model_call_started.correlation_id` matches outbound `x-request-id` and
   `x-switchyard-request-id`. Each agent attempt has its own ID; the gateway
   reuses it for its upstream retries and fallback target. Direct model forwards

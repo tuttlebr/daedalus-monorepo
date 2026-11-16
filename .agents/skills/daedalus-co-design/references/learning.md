@@ -715,6 +715,29 @@ Keep current reusable knowledge, not a run transcript. Follow
 - **Recheck:** include composition, credential discovery, provider format,
   reasoning encoding, relay authentication or classifier/fixture contracts change.
 
+## L030: the coding agent owns a broader optimization loop than a policy helper
+
+- **Status:** explicit user correction and verified workflow limitation; no new
+  application improvement is claimed.
+- **Evidence:** on 2026-11-16 the user reviewed the co-design outcome as an audit
+  rather than useful agentic optimization. Parent `2b6feaf` had a working scalar
+  classifier tuner and authenticated literal-response probe, while Agent
+  `e144752` already provided paired real-model/backend evaluations for tool
+  behavior and research evidence recovery. The skill's outer loop named only
+  classifier proposals and did not connect these broader candidate mechanisms.
+- **Action:** let the coding agent select a task-level bottleneck, implement a
+  causal code/configuration candidate in its owner, use the appropriate existing
+  evaluator, retain/reject from outcomes and feed that result into the next
+  experiment. Carry authorized candidates through rollout and the same acceptance
+  checks. The classifier script keeps its existing narrow allowlist.
+- **Limit:** passing smoke traffic, a route rubric or a token inventory is not
+  an optimization result. The observed large input on a tiny task nominates a
+  context-cost hypothesis; cached usage and payload composition must be measured
+  before claiming waste or deleting capabilities. Review-only and deployment
+  authorization boundaries are unchanged.
+- **Recheck:** evaluator capabilities, ownership, candidate controls, runtime
+  observability or explicit user optimization objectives change.
+
 ## Q002: open findings and decisions
 
 From this run's read-only source reviews, with the cited settings re-read in

@@ -1,4 +1,12 @@
-# Recursive live co-design loop
+# Classifier-specific live policy trials
+
+Use this helper for a classifier-policy hypothesis selected by
+[the agent-directed optimization loop](optimization-loop.md). The coding agent's
+broader loop can change owning implementation and configuration using other
+evaluators. This script's scalar edit allowlist does not restrict that work.
+Its small fixture suite and route expectations establish a narrow routing
+comparison; use representative agent tasks before promoting a policy as an
+end-to-end improvement.
 
 The executable learner is `scripts/co_design_loop.py` (Python 3.11+). It runs on
 demand, never on a schedule. Each iteration evaluates the current incumbent,
