@@ -800,6 +800,81 @@ Keep current reusable knowledge, not a run transcript. Follow
 - **Recheck:** MCP SDK transport, session or lock design, approval-policy
   semantics, group opt-ins, or a server's session and burst limits change.
 
+## L032: per-run ordering does not exclude other runs sharing MCP sessions
+
+- **Status:** verified baseline defect; candidate retained locally; deployment unverified.
+- **Evidence:** 2026-11-17, agent `7845a280`, parent `1d791d58`, Context
+  `2113b673`, Switchyard `c4955d22`, sandbox `3f1cb927`. The per-run scheduler
+  ordered siblings, but an exclusive MCP call locked only session zero. A read
+  in another run could use another session during that call, or an exclusive
+  call could start when session zero freed while another read remained active.
+  Built baseline fixtures reproduced inconsistent snapshots in both directions.
+  The fresh bounded runtime capture contained no agent tasks; this does not
+  establish that a production request encountered the race.
+- **Change:** the agent's MCP dispatcher uses one fair semaphore per user and
+  group within a process. A policy-marked read takes one permit; other calls
+  take all permits. Admission precedes session acquisition, stays outside initial
+  OAuth consent, and refreshes credentials after waiting. Weak entries expire
+  when callers leave; cancellation releases queued admission without replay.
+- **Verification:** built agent with scripted model/MCP peers checks both race
+  directions, independent users/groups, retained read overlap, cancellation and
+  exact call/result binding. Rust regressions additionally hold a queued writer
+  and prove later reads wait, check weak-entry reclamation, and retain refused
+  session fallback. Full Rust and both preparation-mode built HTTP checks pass.
+  Three alternating pairs reduced conflicts from 6 to 0 and consistent reads
+  improved from 24/30 to 30/30, with unchanged calls/rounds and existing result
+  digests. Sixteen-read median tool phase was 574.5 versus 579.0 ms; read overlap
+  stayed at sixteen. This establishes a correctness gain, not a speedup. See the
+  private experiment ledger for evaluator, image identities and limitations.
+- **Action:** review exclusion at every scope that shares a resource: a batch,
+  concurrent runs, a process and replicas. Test mixed calls from independent runs;
+  separate read-only and write-only batches cannot establish mixed exclusion.
+- **Limit:** process-local admission does not coordinate replicas or separate
+  groups targeting the same service. A canceled or timed-out remote request may
+  continue executing; this change retains existing uncertain-outcome semantics.
+  No wire/configuration, approval policy or endpoint changes are required. Older
+  images remain compatible but lack the new exclusion. Real-model behavior,
+  live server effects and production performance are unmeasured.
+- **Recheck:** shared MCP manager lifetime, approval policy, session selection,
+  semaphore bounds/fairness, token refresh or cancellation/reset semantics change.
+
+## L033: dispatch can validate metadata without projecting every tool schema
+
+- **Status:** verified built experiment; no-cache candidate retained locally;
+  deployment unverified.
+- **Evidence:** 2026-11-17, agent `7845a280` plus retained L032 admission fix,
+  parent `1d791d58`, Context `2113b673`, Switchyard `c4955d22`, sandbox
+  `3f1cb927`. Every MCP dispatch constructed the full exposed JSON schema
+  catalog before selecting one tool. Warm synthetic tasks scaled with catalog
+  size despite no further tools/list requests. Compiled validators were already
+  cached, so validator compilation was not the proposed cause.
+- **Change:** separate filtering and full-catalog description validation from
+  JSON projection. Dispatch borrows the selected original Tool; discovery and
+  `__connect` still project identical schemas. Add no cache or freshness rule.
+  A missing description on any exposed sibling must still reject a call;
+  checking only the requested tool would silently change existing behavior.
+- **Verification:** three alternating image pairs at 16/64/256 tools and a
+  512-tool size holdout, twelve warm tasks plus one cold task per arm/size.
+  All 312 tasks retained identical schema/result hashes, sixteen calls and two
+  model rounds. At 64 tools, median warm CPU per task fell 30.0 to 17.5 ms;
+  tool-phase CPU 23.3 to 10.0 ms; completion 30.0 to 19.15 ms. At 16 tools,
+  total CPU fell 14.2 to 10.8 ms. The 256/512 stress sizes also passed. Cold
+  64-tool CPU stayed 210 ms. Full Rust, both preparation-mode built HTTP,
+  schema-error/filter/reconnect, overlap and prior exclusion checks passed.
+- **Action:** avoid constructing public schema JSON for internal membership
+  checks. Preserve whole-catalog validation, filter precedence, exact override
+  lookup, input/output validation and ordering. First remove unnecessary work;
+  a schema cache would add retention/invalidation costs this result does not need.
+- **Limit:** synthetic approximately 1 KB nested schemas, scripted model, local
+  peers and 10 ms CPU ticks aggregated across tasks. Phase CPU includes other
+  runtime work; total CPU corroborates the causal paired change. Source include
+  counts are 2–49 except unbounded Hue; 256/512 are stress cases, not a live
+  inventory. Real catalog shapes, model behavior, production latency and billing
+  remain unmeasured. No context-size or token saving is claimed. Runtime capture
+  contained no agent tasks; it does not establish live impact.
+- **Recheck:** exposure/description policy, schema shape, tool selection,
+  connect/discovery, input/output validation or reconnect behavior changes.
+
 ## Q002: open findings and decisions
 
 From this run's read-only source reviews, with the cited settings re-read in

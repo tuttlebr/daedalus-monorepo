@@ -186,13 +186,19 @@ request bursts. Within one model response an MCP group runs its calls in
 proposed order. Its `max_concurrency` (1 to 16; 16 when unset) bounds how many
 tools whose configured policy is exactly `read_only` overlap; each overlapping
 call uses its own session for that user, and every other operation, including
-`__connect`, still runs alone. The heuristic mutation detector does not grant
-overlap. One run executes at most 16 tool calls at once, and the webscrape and
-source-verifier tools take the same `max_concurrency` range and fallback. A
+`__connect`, still runs alone. The agent also admits calls across runs through
+a fair per-user, per-group semaphore in each backend process: reads take one
+permit, exclusive calls take the group bound. A queued exclusive call prevents
+later reads from passing it. This does not coordinate separate replicas or
+guarantee that a timed-out remote operation has stopped. The heuristic mutation
+detector does not grant overlap. One run executes at most 16 tool calls at once,
+and the webscrape and source-verifier tools take the same `max_concurrency` range and fallback. A
 group or tool stays serial only when it states 1. The Python MCP client ignores
 the key and stays serial.
 
-Mixed versions: runtimes before agent `840a0454` ignore a group's key;
+Mixed versions: the shared admission gate changes no wire or configuration
+fields. Older runtimes lack cross-run read/write exclusion; mixed replicas do
+not gain a distributed gate. Runtimes before agent `840a0454` ignore a group's key;
 `840a0454` and earlier reject any `max_concurrency` above 8 at startup, for
 groups and for the two tools. Roll the image and the workflow out and back
 together. The shipped workflow states 16 on every group and both tools by user
