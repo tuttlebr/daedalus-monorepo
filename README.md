@@ -1,8 +1,12 @@
 # Daedalus stack
 
-This monorepo coordinates four independently versioned applications. Each
-submodule owns its code, deployment and tests; the parent owns shared integration
-guidance and the [co-design workflow](.agents/skills/daedalus-co-design/SKILL.md).
+Daedalus combines a chat application and agent runtime with model routing,
+isolated execution, and information services. Start with the Agent for a working
+chat loop, then add the services your workflow needs. The four submodules are
+independently versioned and each owns its deployment and tests.
+
+The [service integration guide](docs/service-integration.md) follows requests
+across repositories and explains the configuration needed at each connection.
 
 | Application | Ownership | Documentation |
 | --- | --- | --- |
@@ -23,19 +27,43 @@ flowchart LR
     Context --> Storage[Milvus and document sources]
 ```
 
-The agent retains tool results and sends them in subsequent model requests.
-Switchyard owns model continuation transport and selection; it does not execute
-tools or proxy sandbox/context APIs. Hindsight's implementation is externally
-owned. Private uploads retain agent user scope even when they share context
-infrastructure. The agent's minimal local setup can use a provider directly
-without the other submodules.
+The Agent runs the model/tool loop. After a model proposes a tool call, the Agent
+executes it and includes its result in the next model request. Switchyard routes
+that request and streams the provider's response. Sandbox and Context APIs are
+direct tool dependencies of the Agent. Hindsight supplies durable memory from
+an externally maintained service.
+
+## Start developing
+
+Initialize the pinned checkouts from this repository:
+
+```bash
+git submodule update --init --recursive
+git submodule status
+```
+
+For local text chat, follow the [Agent setup](submodules/daedalus-agent/README.md#local-setup).
+It uses Compose and can call a model provider directly. You do not need to bring
+up GPU retrieval services or a sandbox to develop the chat loop.
+
+| You want to change | Start here |
+| --- | --- |
+| Chat, streaming, tools or user identity | [Agent architecture](submodules/daedalus-agent/docs/architecture.md) |
+| Model selection, provider settings or protocol translation | [Switchyard configuration](submodules/daedalus-switchyard/README.md#provider-configurations) |
+| Command execution, code checks or durable experiments | [Sandbox architecture](submodules/daedalus-sandbox/ARCHITECTURE.md) |
+| Document ingestion, retrieval or infrastructure MCP tools | [Context development](submodules/daedalus-context/CONTRIBUTING.md) |
+| Connections between services or a complete task flow | [Service integration](docs/service-integration.md) |
+
+Each owner's `AGENTS.md` and contributor guide describe its local checks. Keep
+application changes in that submodule; use the parent for shared guidance.
 
 ## Shared contracts
 
 Automatic routing classifies every model request, including tool continuations,
 into `max`, `high`, `low` or `instant`. Explicit public aliases and provider-native
-reasoning values are separate contracts. Omit the agent's `model_profile` for
-automatic routing. `none` is not a public effort option. Discover Switchyard's
+reasoning values are separate contracts. Omission of the Agent's `model_profile`
+uses its configured main model; set that model to `daedalus` at the Switchyard
+endpoint for automatic routing. `none` is not a public effort option. Discover Switchyard's
 `routes_*.toml` files and explicitly select a route file for probes or deployment.
 
 Context's topology, RAG schema, collection and environment contracts define its
@@ -50,10 +78,10 @@ uncertain execution POST must not be blindly replayed. Workspaces are pod-local;
 collected files require agent publication to become downloadable. Exploration v2
 has separate grants, durable jobs, storage and recovery contracts.
 
-See the [joint contract map](.agents/skills/daedalus-co-design/references/contract-map.md)
-for source paths and focused checks. Each owner's `AGENTS.md` applies within its
-submodule. Shared skill lessons stay in this parent, outside application runtime
-skill catalogs.
+The [service integration guide](docs/service-integration.md) explains these
+connections with configuration mappings and request flows. For measured changes
+across owners, the [co-design workflow](.agents/skills/daedalus-co-design/SKILL.md)
+provides focused checks and experiment guidance.
 
 ## Deploy the current checkout
 
@@ -76,10 +104,11 @@ and the cluster; run local tests instead when only reviewing source changes.
 
 ## Validation and changes
 
-Record submodule revisions and dirty state before a review. Exercise the affected
-service boundary with synthetic inputs and retain source, rendered configuration
-and running-image provenance separately. Unit tests and HTTP readiness do not
-establish a working full-stack request or an optimization benefit.
+Run local checks in each changed repository, then exercise the connection your
+change affects. For example, a sandbox adapter change needs a staged-file request
+and a returned result through the Agent; a retrieval change needs a known query
+and the expected source passage. See the integration guide's
+[development checks](docs/service-integration.md#develop-and-check-a-change).
 
 The co-design workflow captures bounded read-only runtime evidence and stores
 raw logs and run reports under ignored `.artifacts/daedalus-co-design/`.
