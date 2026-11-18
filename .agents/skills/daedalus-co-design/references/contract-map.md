@@ -51,10 +51,14 @@ validation. Hindsight is an external integration, not a fifth owned submodule.
   target defaults. An explicit alias alone does not prove the emitted effort.
 - Selected TOML can differ from the chart example. Classifier prose/comments can
   lag executable fields; reconcile them when changing policy.
-- Leave `stream` unset on every target. A target default replaces the caller's
-  choice on any request translated between Chat and Responses and whenever the
-  field is omitted. The agent's automation planning and direct model forwards
-  are non-streaming Chat callers of the automatic route.
+- Every shipped generation target requires `extra_body.stream = true`.
+  Switchyard's required-streaming patch overrides explicit false as well as
+  omitted stream controls. The agent's automation planning and direct model
+  forwards request SSE; the frontend consumes planning SSE before draft validation.
+  Auxiliary operations and the classifier remain separate non-generation APIs.
+  Roll out the SSE consumer before the runtime/gateway; legacy direct JSON clients
+  must migrate. This is the user's explicit streaming policy, not a generic
+  recommendation for upstream Switchyard deployments.
 - Retries exist at two layers. A gateway client retries twice before a response
   when `max_retries` is unset, and has no upstream deadline when `timeout_ms` is
   unset; no provider file sets either. The automatic route then tries
@@ -132,7 +136,7 @@ merely to validate a skill edit.
   Covers automatic/explicit routing, tool continuation, classifier timeout,
   a transient upstream failure, a mid-stream upstream abort, the combined
   request count under persistent failure, malformed tool rejection, retired
-  profiles and the non-streaming automation-planning forward with its
+  profiles and the streaming automation-planning forward with its
   correlation ID. A new retry layer or a changed gateway default fails the
   persistent-failure count; update `GATEWAY_RETRIES` only with source evidence.
   It does not validate real provider capabilities, latency, or task quality.

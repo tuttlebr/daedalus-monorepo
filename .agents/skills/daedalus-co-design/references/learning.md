@@ -442,7 +442,11 @@ Keep current reusable knowledge, not a run transcript. Follow
 
 ## L018: a target stream default breaks translated and stream-omitting callers
 
-- **Status:** verified on the built agent and gateway; fixed with regressions.
+- **Status:** historical behavior verified; the no-default remedy is superseded
+  by the user's 2026-11-18 requirement that all generation calls stream. The new
+  gateway policy forces SSE, including same-format explicit false, and both the
+  runtime planning forward and its frontend consumer support it. Preserve the
+  caller/consumer assessment lesson below; do not restore the old no-stream rule.
   Supersedes L014's conclusion for native Responses targets.
 - **Evidence:** 2026-11-10, agent `4da2bb16`, Switchyard `293eb62` built from its
   Dockerfile. A 72-case matrix (three provider files, shipped and toggled

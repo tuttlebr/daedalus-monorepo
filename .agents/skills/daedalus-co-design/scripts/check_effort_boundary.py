@@ -565,10 +565,8 @@ def check(agent_binary, gateway_binary, routes_path):
                             flush=True,
                         )
 
-                    # A stateless, non-streaming Chat forward on the automatic
-                    # route: the caller's stream choice, JSON mode and an opaque
-                    # correlation ID must survive whichever transport the
-                    # selected provider uses.
+                    # A stateless streaming Chat forward on the automatic route:
+                    # JSON mode and correlation survive either provider transport.
                     state.update(providers=[], call_ids=[], judges=0, mode="normal", choice="low")
                     request = Request(
                         agent_url + "/internal/autonomy/plan",
@@ -588,13 +586,17 @@ def check(agent_binary, gateway_binary, routes_path):
                         raise AssertionError(
                             ("autonomy_plan", error.code, error.read().decode(), state)
                         ) from error
-                    assert content_type.startswith("application/json"), content_type
-                    reply = json.loads(text)["choices"][0]
-                    assert reply["finish_reason"] == "stop", reply
-                    assert json.loads(reply["message"]["content"]) == json.loads(PLAN)
+                    assert content_type.startswith("text/event-stream"), content_type
+                    events = [json.loads(line[6:]) for line in text.splitlines()
+                              if line.startswith("data: {")]
+                    choices = [choice for event in events for choice in event.get("choices", [])]
+                    assert any(c.get("finish_reason") == "stop" for c in choices), choices
+                    content = "".join(c.get("delta", {}).get("content") or "" for c in choices)
+                    assert json.loads(content) == json.loads(PLAN)
+                    assert "data: [DONE]" in text
                     assert len(state["providers"]) == 1 and state["judges"] == 1, state
                     payload = state["providers"][0]
-                    assert not payload.get("stream"), payload
+                    assert payload.get("stream") is True, payload
                     target = config["routes"]["stage"]["classifier"]["choices"]["low"]["target"]
                     assert payload["model"] == config["targets"][target]["model"]
                     assert (
