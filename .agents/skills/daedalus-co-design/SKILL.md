@@ -1,6 +1,6 @@
 ---
 name: daedalus-co-design
-description: Improve Daedalus task completion, latency and resource use through measured experiments across agent, Switchyard, sandbox and context. Use for joint optimization, shared-contract changes or a requested review cycle; excludes unrelated UI and isolated work without cross-owner impact.
+description: Improve Daedalus task completion, latency and resource use across agent, Switchyard, sandbox and context. Use for measured joint optimization, KV-cache investigation and remediation, shared-contract changes, or review cycles. Excludes unrelated UI and isolated work without cross-owner impact.
 ---
 
 # Daedalus co-design
@@ -25,6 +25,10 @@ Read [the optimization loop](references/optimization-loop.md),
 `AGENTS.md` files and preserve unrelated work. Record all four submodule SHAs and
 dirty state. Resume the prior experiment ledger when one exists; don't restart
 a general audit on every invocation.
+
+Read [KV-cache investigation and remediation](references/kv-cache.md) when
+diagnosing avoidable cache misses or changing architecture that can affect the
+rendered prompt prefix or its cache placement.
 
 Translate the request into observable outcomes on representative tasks: correct
 completion, useful latency, model/tool rounds, recoverable evidence and resource

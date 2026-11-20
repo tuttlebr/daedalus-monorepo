@@ -3,8 +3,8 @@
 `submodules/daedalus-agent` and `submodules/daedalus-switchyard` form one model
 request path. The agent calls `submodules/daedalus-sandbox` directly for code
 execution and offline linting/verification. For routing, reasoning controls,
-provider transport, shared tool or stream contracts, sandbox integration,
-context ingestion/retrieval and information-layer integration, and
+KV-cache behavior, provider transport, shared tool or stream contracts, sandbox
+integration, context ingestion/retrieval and information-layer integration, and
 end-to-end optimization, use
 [daedalus-co-design](.agents/skills/daedalus-co-design/SKILL.md). Assess affected
 owners and consumers before changing a shared contract, even if only one needs an edit.
