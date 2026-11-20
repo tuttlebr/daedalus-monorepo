@@ -23,6 +23,8 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from route_source import compose_routes
+
 PLAN = '{"type":"clarify","message":"Which lights?"}'
 # The gateway's own upstream retry default when a client sets no max_retries.
 GATEWAY_RETRIES = 2
@@ -186,10 +188,10 @@ def responses_reply(body, malformed):
 
 
 def effort(payload):
-    """Provider-native reasoning effort of a Chat or Responses payload/default."""
+    """Provider-native effort; some targets leave the provider's default in effect."""
     if "reasoning_effort" in payload:
         return payload["reasoning_effort"]
-    return payload["reasoning"]["effort"]
+    return (payload.get("reasoning") or {}).get("effort")
 
 
 def tool_results(payload):
@@ -204,8 +206,9 @@ def tool_results(payload):
 
 
 def check(agent_binary, gateway_binary, routes_path):
-    source = Path(routes_path).read_text()
+    source = compose_routes(routes_path)
     config = tomllib.loads(source)
+    task_routing = config["routes"]["stage"]["classifier"]["classify_trigger"] == "user_turn"
     replies = {"openai_chat": chat_reply, "openai_responses": responses_reply}
     if any(c["format"] not in replies for c in config["llm_clients"].values()):
         raise ValueError("Synthetic peer supports Chat and Responses provider routes")
@@ -432,7 +435,11 @@ def check(agent_binary, gateway_binary, routes_path):
                         request = Request(
                             agent_url + "/v1/chat/completions",
                             data=json.dumps(body).encode(),
-                            headers={**internal, "x-daedalus-request-id": f"fixture-{index}"},
+                            headers={
+                                **internal,
+                                "x-conversation-id": "shared-fixture-conversation",
+                                "x-daedalus-request-id": f"fixture-{index}",
+                            },
                         )
                         try:
                             with urlopen(request, timeout=15) as response:
@@ -468,9 +475,8 @@ def check(agent_binary, gateway_binary, routes_path):
                                 len(state["providers"]),
                                 per_attempt,
                             )
-                            assert state["judges"] == (
-                                1 + AGENT_RETRIES if profile is None else 0
-                            ), state["judges"]
+                            auto_classifications = 1 if task_routing else 1 + AGENT_RETRIES
+                            assert state["judges"] == (auto_classifications if profile is None else 0), state
                         elif mode == "malformed":
                             # A completed provider reply with invalid tool JSON is
                             # rejected before execution; it is not a transport retry.
@@ -504,9 +510,8 @@ def check(agent_binary, gateway_binary, routes_path):
                                 assert effort(payload) == effort(
                                     config["targets"][target]["extra_body"]
                                 )
-                            assert state["judges"] == (2 if profile is None else 0), (
-                                state
-                            )
+                            auto_classifications = 1 if task_routing else 2
+                            assert state["judges"] == (auto_classifications if profile is None else 0), state
                             assert tool_results(state["providers"][-1]) == ["call_clock"], (
                                 state["providers"][-1]
                             )

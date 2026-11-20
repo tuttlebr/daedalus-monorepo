@@ -17,7 +17,7 @@ sequenceDiagram
     UI->>Agent: Authenticated chat request (SSE)
     Agent->>Gateway: History and available tool schemas
     opt Automatic daedalus route
-        Gateway->>Judge: Classify the next response
+        Gateway->>Judge: Classify the whole task
         Judge-->>Gateway: Category or fallback signal
     end
     Gateway->>Model: Request with selected target defaults
@@ -26,8 +26,8 @@ sequenceDiagram
     Agent->>Tool: Validated, authorized tool call
     Tool-->>Agent: Result and source or execution metadata
     Agent->>Gateway: History including tool result
-    Note over Gateway,Judge: Automatic continuations are classified again
-    Gateway->>Model: Next model request
+    Note over Agent,Gateway: The continuation carries the serving target
+    Gateway->>Model: Continue on the selected target
     Model-->>Gateway: Streamed answer
     Gateway-->>Agent: Answer events
     Agent-->>UI: Run events and completion
@@ -80,20 +80,19 @@ The blended profile selects targets from more than one provider. Read the compos
 target's model and `extra_body` to determine native reasoning settings; a category
 name is not a promise about a provider's reasoning, speed or price.
 
-Automatic requests use the separate decision service on every round. That
-service is an external deployment dependency, not a model server installed by
-these four repositories. Classification failure selects the configured default;
-explicit aliases bypass classification. The model request itself is preserved
-when the gateway trims classifier input. See
+An automatic task uses the separately deployed decision service for its initial
+choice. Tool continuations reuse the target and skip the judge. Classification
+failure selects the configured default. Explicit aliases bypass classification.
+Trimming classifier input preserves the model request. See
 [decision routing](../submodules/daedalus-switchyard/docs/standalone-decision-routing.md).
 
 Gateway generation responses are SSE, including when a direct caller omits
 `stream` or sends `false`. Use a streaming client. The Agent's frontend
 compatibility API can aggregate a completed Agent run into a non-streaming
 response; that is a separate consumer-facing contract. Provider-affinity headers
-come from the selected gateway client configuration. The Agent's opaque `user`
-field and request IDs serve separate purposes; none of them pins an automatic
-route or grants access to another user's data.
+come from the selected gateway client configuration. The agent supplies routing
+identity separately from the provider affinity setting and the per-attempt
+correlation ID.
 
 ## Connect the information layer
 

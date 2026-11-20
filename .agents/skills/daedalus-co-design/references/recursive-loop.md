@@ -108,8 +108,9 @@ requests through a streaming recording relay to the NodePort. The relay preserve
 Chat or Responses transport and records both top-level and nested reasoning effort.
 The isolated process receives synthetic values for the selected clients' credential
 variable names; incoming authorization is never forwarded by the relay. The real decision
-service classifies each request and continuation. Outgoing profile/effort and
-exact-ID classifier events are checked. This records the payload submitted to
+service classifies the initial task. Continuations carry the same task identity.
+The evaluator checks the outgoing profile and correlates each request to either
+the initial decision or the reuse event expected for that trigger. This records the payload submitted to
 the LAN gateway, not an independently observed provider-internal configuration.
 Source and live routes must agree before interpreting effective provider effort.
 The isolated gateway/relay overhead is present in both baseline and candidate;

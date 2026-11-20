@@ -44,9 +44,10 @@ validation. Hindsight is an external integration, not a fifth owned submodule.
 - Inspect each selected target's model and body; public labels do not establish
   provider-native reasoning behavior or distinct settings. Preserve explicit
   aliases and provider payload defaults when changing only classification.
-- Automatic routing uses `decision_api` on every request, including continuations.
-  Do not assume sticky choice, a retained task floor or cross-provider failover.
-  Read actual fallback targets from the selected TOML.
+- Automatic `daedalus` routing selects a target for the whole run. The agent
+  sends a run-scoped task ID and carries the serving target across tool rounds.
+  Retries and steering belong to the same run. A later run in that conversation
+  gets a fresh decision. Read the selected TOML for the provider fallback.
 - Target IDs differ from provider model names. Caller fields can override shallow
   target defaults. An explicit alias alone does not prove the emitted effort.
 - Selected TOML can differ from the chart example. Classifier prose/comments can
@@ -66,9 +67,9 @@ validation. Hindsight is an external integration, not a fifth owned submodule.
   product, not one setting. After a response starts only the agent retries, and
   only on the gateway's `upstream transport error: ` stream frame.
 
-The agent architecture guide must describe standalone classification on every
-model continuation. A stable session header is not evidence of sticky routing;
-legacy Composite patches and frozen investigations do not define current routes.
+Check both the first request's classification event and subsequent reuse events
+when verifying the agent/gateway contract. Confirm provider KV hits separately
+using reported cached-input usage. See the [routing lifecycle](../../../../submodules/daedalus-switchyard/docs/standalone-decision-routing.md).
 For initial onboarding, compare generated environment output to real consumer
 keys and Helm precedence, then verify the relevant protocol through the consumer.
 

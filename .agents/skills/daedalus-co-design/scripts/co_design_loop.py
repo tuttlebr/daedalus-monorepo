@@ -201,15 +201,17 @@ class Client:
         )
         self.key, self.tokens, self.count = key, tokens, count
 
-    def chat(self, messages, model, call_id, **extra):
+    def chat(self, messages, model, call_id, *, task_id=None, **extra):
         if self.count:
             self.budget.take()
         headers = {
             "x-request-id": call_id,
             "x-switchyard-request-id": call_id,
-            "x-switchyard-session-id": call_id,
+            "x-switchyard-session-id": task_id or call_id,
             "Idempotency-Key": call_id,
         }
+        if task_id is not None:
+            headers["x-switchyard-task-id"] = task_id
         if self.key:
             headers["Authorization"] = "Bearer " + self.key
         stream = Stream()
@@ -561,7 +563,7 @@ def evaluate(client, cases, run_id, repeats=1, model="daedalus", relay=None):
                     ],
                     "tool_choice": "required",
                 }
-            row, stream = client.chat(messages, model, call_id, **extra)
+            row, stream = client.chat(messages, model, call_id, task_id=call_id, **extra)
             row.update(case=case["id"], split=case["split"], repeat=repeat)
             attempts = [row["call_id"]]
             if case.get("tool"):
@@ -601,7 +603,7 @@ def evaluate(client, cases, run_id, repeats=1, model="daedalus", relay=None):
                         },
                     ]
                     follow, stream = client.chat(
-                        messages, model, call_id + "-continuation"
+                        messages, model, call_id + "-continuation", task_id=call_id
                     )
                     attempts.append(follow["call_id"])
                     row["success"] = follow["success"]
@@ -628,7 +630,7 @@ def evaluate(client, cases, run_id, repeats=1, model="daedalus", relay=None):
     return rows
 
 
-def attach_gateway_evidence(log_path, rows):
+def attach_gateway_evidence(log_path, rows, trigger="every_request"):
     lines = log_path.read_text(errors="replace").splitlines()
     for row in rows:
         events = []
@@ -643,19 +645,26 @@ def attach_gateway_evidence(log_path, rows):
                     line,
                 )
                 elapsed = re.search(r'elapsed_ms["=: ]+(\d+)', line)
-                if target:
+                event = re.search(
+                    r'event["=: ]+"?decision_api_(classified|reused)\b', line
+                )
+                if target and event:
                     events.append(
                         {
                             "call_id": call_id,
+                            "decision": event[1],
                             "target": target[1],
                             "classifier_ms": int(elapsed[1]) if elapsed else None,
                         }
                     )
-        row["classifier_events"] = events
-        # An outgoing request alone cannot establish that automatic classification worked.
-        row["classification_observed"] = {e["call_id"] for e in events} == set(
-            row["attempt_ids"]
-        )
+        row["routing_events"] = events
+        row["classifier_events"] = [e for e in events if e["decision"] == "classified"]
+        expected = [
+            (call_id, "classified" if index == 0 or trigger == "every_request" else "reused")
+            for index, call_id in enumerate(row["attempt_ids"])
+        ]
+        observed = [(event["call_id"], event["decision"]) for event in events]
+        row["classification_observed"] = observed == expected
         row["route_ok"] = row["route_ok"] and row["classification_observed"]
 
 
@@ -1169,7 +1178,10 @@ def main():
                             args.repeats,
                             relay=relay,
                         )
-                    attach_gateway_evidence(trial_dir / "gateway.log", rows)
+                    classifier = tomllib.loads(policy)["routes"]["stage"]["classifier"]
+                    attach_gateway_evidence(
+                        trial_dir / "gateway.log", rows, classifier.get("classify_trigger", "user_turn")
+                    )
                     save(trial_dir / "results.json", rows)
                     return rows
 

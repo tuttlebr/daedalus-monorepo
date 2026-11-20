@@ -5,6 +5,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import co_design_loop as loop
 
@@ -199,6 +200,48 @@ class LoopTests(unittest.TestCase):
             self.assertTrue(rows[0]["route_ok"])
             self.assertEqual(rows[0]["classifier_events"][0]["classifier_ms"], 31)
             self.assertFalse(rows[1]["route_ok"])
+
+    def test_tool_probe_keeps_its_task_identity_across_distinct_model_calls(self):
+        headers_seen = []
+
+        def respond(url, body, headers, timeout, feed):
+            headers_seen.append(headers)
+            if len(headers_seen) == 1:
+                delta = {"tool_calls": [{"index": 0, "id": "tool-1", "function": {
+                    "name": "probe_value", "arguments": "{}"
+                }}]}
+                finish = "tool_calls"
+            else:
+                delta, finish = {"content": "OK"}, "stop"
+            frame = json.dumps({"choices": [{"delta": delta, "finish_reason": finish}]})
+            feed(("data: " + frame + "\n\ndata: [DONE]\n\n").encode())
+            return 200, {}, b""
+
+        client = loop.Client("http://127.0.0.1", loop.Budget(2, 10))
+        case = {"id": "lookup", "split": "dev", "prompt": "Read", "answer": "OK", "tool": True}
+        with patch.object(loop, "wire", respond):
+            result, = loop.evaluate(client, [case], "run")
+        self.assertTrue(result["correct"])
+        first, follow = headers_seen
+        self.assertEqual(first["x-switchyard-task-id"], follow["x-switchyard-task-id"])
+        self.assertEqual(first["x-switchyard-session-id"], follow["x-switchyard-session-id"])
+        self.assertNotEqual(first["x-switchyard-request-id"], follow["x-switchyard-request-id"])
+
+    def test_user_turn_evidence_requires_one_initial_decision_and_a_reused_continuation(self):
+        with tempfile.TemporaryDirectory() as path:
+            log = Path(path) / "gateway.log"
+            initial = 'correlation_id="open" event="decision_api_classified" selected_target=low elapsed_ms=31\n'
+            repeated = 'correlation_id="tool" event="decision_api_classified" selected_target=low elapsed_ms=29\n'
+            reused = 'correlation_id="tool" event="decision_api_reused" selected_target=low\n'
+            for evidence, valid in [(reused, False), (initial + repeated, False), (initial + reused, True)]:
+                with self.subTest(evidence=evidence):
+                    log.write_text(evidence)
+                    rows = [{"attempt_ids": ["open", "tool"], "route_ok": True}]
+                    loop.attach_gateway_evidence(log, rows, "user_turn")
+                    self.assertEqual(rows[0]["route_ok"], valid)
+                    if valid:
+                        self.assertEqual(len(rows[0]["classifier_events"]), 1)
+                        self.assertEqual(rows[0]["routing_events"][1]["decision"], "reused")
 
     def test_transport_failure_does_not_prompt_for_policy_changes(self):
         def propose(*_):

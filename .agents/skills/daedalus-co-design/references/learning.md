@@ -130,7 +130,7 @@ Keep current reusable knowledge, not a run transcript. Follow
   Fourteen synthetic cases cover automatic and six explicit routes, a tool
   continuation, classifier timeout, upstream retry, malformed tool rejection,
   retired values including `none`. Explicit routes bypass classification;
-  automatic continuations reclassify. Rejected profiles never reach a provider.
+  automatic continuations reclassified at that revision. Rejected profiles never reach a provider.
 - **Action:** omit `model_profile` for automatic routing; migrate configured
   mappings and API/stream workers together. Resubmit queued retired values with
   omission or a configured canonical effort. Preserve explicit selections.
@@ -922,6 +922,83 @@ Keep current reusable knowledge, not a run transcript. Follow
   verifier failures as the cause of the final main-model stream error.
 - **Recheck:** LangChain/OpenAI dependency upgrades, the verifier's model
   client, and Switchyard required-streaming or terminal-event handling.
+
+## L036 — KV reuse across effort changes on Baseten
+
+On 2026-11-20, eight bounded Responses requests exercised the mounted
+Baseten profile for DeepSeek V4.1 Flash 1017 Fast. Two independent synthetic
+prefixes tested high/high/low/low and the reverse order. All eight returned
+the exact requested answer. Every same-effort repeat reported 5,120 cached
+input tokens out of 5,260. Both effort switches reported zero. Run-level usage
+from two ordinary tasks in the same window included substantial reuse. Their
+per-round attribution was unavailable.
+
+A 16-request direct Baseten control repeated both orders with the configured
+session affinity header present and omitted. All four switches reported zero
+cached tokens, and all eight same-effort repeats reported 5,120. The model's
+reference encoder and tokenizer agreed for only the first eight tokens between
+low and high; the ninth encoded 50 or 75 before the system instructions.
+Replica identity and the hosted renderer were unobserved. Preserve affinity
+for placement of related requests. Recheck the rendering after model changes.
+[Baseten cache measurements](https://docs.baseten.co/inference/model-apis/pricing-and-limits#check-cache-reuse)
+and [pinned model encoder](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/blob/08c8657f02291e11b6f6b63e0e16014f8e748518/encoding/encoding.py).
+
+In a subsequent 12-request hosted comparison, retaining a previously served
+high target for two low-classified tool continuations recovered 5,376 cached
+tokens on each continuation. Both policies returned the exact answers and ran
+each tool once. Across the affected tasks, uncached input fell from 22,072 to
+11,334 tokens. Output grew from 202 to 244 tokens and both continuations took
+longer. A harder low-to-high holdout kept its escalation. The classifier was
+scripted and the sample has one pair per task. Keep the mechanism opt-in and
+preserve explicit effort. Recheck after provider, model or template changes.
+Test longer chains with the real classifier before changing the default.
+Preserve the accepted low target as a fallback when retained high fails before
+streaming. After visible output, surface a failure with the partial result.
+
+Eight direct Baseten Responses calls on GLM-5.3-Fast tested both switch directions
+with one configured affinity value. The low/low/high/high sequence reported
+0, 5,376, 0 and 5,376 cached tokens out of 5,391. The high/high/low/low
+sequence reported four zeros, including both same-effort controls. Only the
+low-to-high switch was bracketed by warm controls. The GLM-5.3 reference
+template and tokenizer diverged at token nine before tools or messages. Verify
+each direction with warm controls before transferring an effort-retention policy
+between models. [Z.ai reference template](https://huggingface.co/zai-org/GLM-5.3/blob/ba32f8c19c8738e2c57c71798c601d477a7bf844/chat_template.jinja#L3)
+
+The user selected one automatic choice per Daedalus run on 2026-11-20 for
+every provider profile. Account for expected synthesis and verification when
+classifying the initial task. Keep effort through tools, retries, active-run
+steering and final synthesis. A new run in the same conversation gets a fresh
+choice. The explicit profile and provider fallback contracts still apply.
+In 98 paired local tasks across seven route sources and two API formats, the
+run-scoped implementation made 70 classifier calls versus 154, with the same
+210 answering requests and 112 tool calls. This supersedes the earlier
+Baseten-specific opt-in recommendation. Recheck model accuracy and cache
+savings using hosted task outcomes after rollout.
+
+## L037 — Validate provisional work at each completion boundary
+
+On 2026-11-20, local fixtures against agent 9b655e6a and Switchyard 32729d9
+reproduced partial-result failures. A Responses provider's
+bare SSE sentinel after valid-looking tool arguments allowed the incumbent
+gateway and agent to execute a tool. Require the typed terminal event and
+exercise the built consumer with a tool execution counter. On Chat streams,
+check the finish reason for the choice that supplied the tool fragments. Retain
+text-only sentinel handling and compatible explicit stop conventions.
+
+A deferred catalog that ended in a conflict could acknowledge discovery and
+abort sibling calls. Validate the full addition before acknowledging discovery,
+then check the failing call, the surviving catalog and each sibling receipt
+through the next model request.
+
+A live stream reader retained an ordered copy of tool activity even after the
+Redis steps key disappeared. Finalizing from that copy preserved the evidence
+in terminal status and in the saved conversation after reload. On process
+death the worker depends on the durable checkpoint. When job status expires, a
+transient failure to read the saved conversation can hide a completed receipt.
+Retry the owned history read and restore the saved outcome. In a Chromium
+fixture, this recovered the turn after one HTTP 503 with zero new submissions
+or conversation writes. Recheck these paths when changing stream failure
+handling, lease handoff, history recovery or persisted state formats.
 
 ## Q002: open findings and decisions
 

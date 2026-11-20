@@ -59,8 +59,8 @@ application changes in that submodule; use the parent for shared guidance.
 
 ## Shared contracts
 
-Automatic routing classifies every model request, including tool continuations,
-into `max`, `high`, `low` or `instant`. Explicit public aliases and provider-native
+Automatic routing chooses `max`, `high`, `low` or `instant` for the task and
+keeps the selected target through its tool continuations. Explicit public aliases and provider-native
 reasoning values are separate contracts. Omission of the Agent's `model_profile`
 uses its configured main model; set that model to `daedalus` at the Switchyard
 endpoint for automatic routing. `none` is not a public effort option. Discover Switchyard's
