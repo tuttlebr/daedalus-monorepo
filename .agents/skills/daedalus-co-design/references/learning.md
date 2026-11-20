@@ -879,6 +879,50 @@ Keep current reusable knowledge, not a run transcript. Follow
 - **Recheck:** exposure/description policy, schema shape, tool selection,
   connect/discovery, input/output validation or reconnect behavior changes.
 
+## L034: a failed chat can preserve activity and still have no final answer
+
+- **Status:** observed live and verified with a built frontend. Production
+  rollout of the fix remains unverified.
+- **Evidence:** on 2026-11-20, an exact-ID join in `daedalus` linked two
+  model HTTP 429s and a third request that opened an HTTP 200 Responses stream
+  before failing with a non-retryable `model_stream/response` error. The final
+  attempt emitted zero assistant bytes. The failed job and the saved assistant
+  message contained 98 bytes from an earlier model round and 52 activity
+  entries. The final failure code is unknown.
+- **Action:** compare the last model call's output counters, the worker's
+  terminal job status and the owned conversation before diagnosing data loss.
+  Check the browser both immediately and after reload. The interruption banner
+  uses the presence of saved assistant text to describe what the user can see.
+  Tool activity remains available through the existing disclosure.
+- **Verification:** the incumbent browser showed the preserved text and the
+  misleading banner. The candidate passed the same terminal-error fixture with
+  and without saved text and the success/EOF formatting holdouts. No wire or
+  persisted-error changes are required. The deployed incident's browser state
+  and candidate rollout remain unverified.
+- **Recheck:** stream error wording, error finalization, activity display, and
+  the chat status or conversation recovery path.
+
+## L035: source verification must request SSE and verify its terminal state
+
+- **Status:** observed live and reproduced through the built gateway and
+  pinned client. Production rollout of the fix remains unverified.
+- **Evidence:** on 2026-11-20, the Python source verifier reported
+  `AttributeError` during a failed chat. Both the deployed backend and built
+  Switchyard artifacts reproduced the same error with a synthetic Responses
+  provider. Switchyard returned configured SSE to a verifier that requested a
+  unary result. Streaming alone let the pinned LangChain client return text
+  from failed and truncated Responses streams in the direct fixture.
+- **Action:** request streaming explicitly in the verifier and require
+  Responses `status=completed` or Chat `finish_reason=stop` before accepting
+  critic text. Preserve claim-verdict schema validation. Check leaf model
+  clients separately when changing the transport used by the main agent.
+- **Verification:** through the built gateway, the two complete Chat/Responses
+  cases went from zero correct verdict texts to two. The four failed or
+  truncated cases stayed rejected. The capture does not establish the source
+  verifier failures as the cause of the final main-model stream error.
+- **Recheck:** LangChain/OpenAI dependency upgrades, the verifier's model
+  client, and Switchyard required-streaming or terminal-event handling.
+
 ## Q002: open findings and decisions
 
 From this run's read-only source reviews, with the cited settings re-read in
