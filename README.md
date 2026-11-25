@@ -85,6 +85,14 @@ provides focused checks and experiment guidance.
 
 ## Deploy the current checkout
 
+To deploy the versions pinned by the latest monorepo `main`, run these commands
+from the root of the build host's `main` checkout.
+
+```bash
+git pull --ff-only
+git submodule update --init --recursive
+```
+
 From any application submodule, `make deploy` builds and publishes its selected
 repository-owned images, then upgrades the existing Kubernetes release using
 that checkout's configuration. Configure the repository's local deployment
