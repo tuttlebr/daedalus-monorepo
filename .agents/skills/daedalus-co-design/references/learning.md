@@ -1016,6 +1016,23 @@ service received the write once. An interactive chat held open across report
 failure received its full reply. Recheck the built charter fixture when changing
 tool disabling, completion budgets, Pydantic validation or worker error handling.
 
+## L039 — Recover tool evidence when the model rejects a continuation for length
+
+On November 26, 2026, an agent run at `fbc69106` completed 23 tool calls before
+the model rejected a 281,343-token continuation against its 262,144-token window.
+Switchyard returned HTTP 200 and carried the validation error in SSE. Join the
+backend model-call ID to the serving frontend's request and inspect the terminal
+error. Cached tokens still occupy the model's context window.
+
+Agent `160e3220` archived eligible completed tool results in the existing
+user-scoped output store before retrying. A live application probe through a
+non-node LAN client exceeded a later 524,288-token window with 966,271 input
+tokens. The retry used 56,790 tokens, recovered the exact checkpoint and
+finished with one sandbox execution and one lookup. Exercise archive failure,
+retriever availability, receipt identity and remaining retry budget when
+changing this path. The built [research check](../../../../submodules/daedalus-agent/builder/migration/research_check.py)
+covers both preparation modes.
+
 ## Q002: open findings and decisions
 
 From this run's read-only source reviews, with the cited settings re-read in
