@@ -1000,6 +1000,22 @@ fixture, this recovered the turn after one HTTP 503 with zero new submissions
 or conversation writes. Recheck these paths when changing stream failure
 handling, lease handoff, history recovery or persisted state formats.
 
+## L038 — Required report submission needs its own correction budget
+
+An autonomous run on November 26, 2026 ended after two different validation
+errors disabled its only publication tool. All 43 model calls finished. The
+worker saved an uncertain interruption. A separate chat completed and its saved
+reply matched the job result. Check the automation record and chat job
+independently when tracing a report of lost streams.
+
+With agent `d99660ca` as the source baseline, the incident image failed a
+synthetic summary-then-evidence repair after a bounded series of reads. The
+local candidate recovered the report using only the submission tool. A repeat
+failure after a write retained the attempted-mutation flag and the fixture
+service received the write once. An interactive chat held open across report
+failure received its full reply. Recheck the built charter fixture when changing
+tool disabling, completion budgets, Pydantic validation or worker error handling.
+
 ## Q002: open findings and decisions
 
 From this run's read-only source reviews, with the cited settings re-read in
