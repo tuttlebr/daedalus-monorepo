@@ -1058,6 +1058,23 @@ first initialization and recovery that changes state without finding due work.
 The comparison covers state writes. Reading and encoding the state still costs
 work on every poll.
 
+## L041 — Verify hosted System One classification through the gateway
+
+On November 28 the published Bison profile inherited single-model discovery
+and tokenization from self-hosted Elephant. Four LAN probes returned the
+default high target, each with a `model_discovery` warning. Baseten listed
+23 models, returned 404 on tokenization and accepted the public Bison slug
+on System One. Its response named the 31B backend and counted one output token.
+The generic catalog advertised 32,768 tokens. A direct System One request
+scored 34,099 input tokens successfully.
+
+The repaired profile sends one bounded scoring request per new task, with an
+explicit response identity and provider-enforced token limit. Eight production
+probes exercised all four targets across both API formats. One continuation
+reused its assigned target. For a similar incident, correlate each request with
+its score and fallback warning. An HTTP 200 and a selected target also occur
+when classification fails. [Classifier input limits](../../../../submodules/daedalus-switchyard/docs/decision-input-limits.md)
+
 ## Q002: open findings and decisions
 
 From this run's read-only source reviews, with the cited settings re-read in

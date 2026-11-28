@@ -74,7 +74,8 @@ the minimal local workflow does not configure that mapping. Additional generic
 Agent effort labels do not create gateway routes.
 
 In Switchyard, discover `routes_*.toml` and select a profile explicitly. Shared
-classifier settings live in `config/decision/elephant.toml`, category policy in
+classifier settings live in `config/decision/bison.toml` for hosted Baseten
+or `config/decision/elephant.toml` for self-hosted SGLang, category policy in
 `config/routing/four-category.toml`, and provider definitions in `config/llms/`.
 The blended profile selects targets from more than one provider. Read the composed
 target's model and `extra_body` to determine native reasoning settings; a category

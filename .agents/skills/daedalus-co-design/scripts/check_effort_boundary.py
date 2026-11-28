@@ -208,7 +208,8 @@ def tool_results(payload):
 def check(agent_binary, gateway_binary, routes_path):
     source = compose_routes(routes_path)
     config = tomllib.loads(source)
-    task_routing = config["routes"]["stage"]["classifier"]["classify_trigger"] == "user_turn"
+    classifier = config["routes"]["stage"]["classifier"]
+    task_routing = classifier["classify_trigger"] == "user_turn"
     replies = {"openai_chat": chat_reply, "openai_responses": responses_reply}
     if any(c["format"] not in replies for c in config["llm_clients"].values()):
         raise ValueError("Synthetic peer supports Chat and Responses provider routes")
@@ -237,7 +238,7 @@ def check(agent_binary, gateway_binary, routes_path):
                 probabilities[choice] = 1.0
                 data = json.dumps(
                     {
-                        "model": "fixture-judge",
+                        "model": classifier.get("baseten", {}).get("response_model", body["model"]),
                         "answers": {
                             "effort": {
                                 "type": "choice",
@@ -246,7 +247,7 @@ def check(agent_binary, gateway_binary, routes_path):
                                 "probabilities": probabilities,
                             }
                         },
-                        "usage": {"input_tokens": 10, "output_tokens": 0},
+                        "usage": {"input_tokens": 10, "output_tokens": int("baseten" in classifier)},
                     }
                 )
                 content_type = "application/json"
@@ -353,7 +354,7 @@ def check(agent_binary, gateway_binary, routes_path):
                 "DAEDALUS_AUTHORIZATION": "rust",
                 "DAEDALUS_TOOL_EXECUTOR": "disabled",
             }
-            for client in config["llm_clients"].values():
+            for client in [classifier, *config["llm_clients"].values()]:
                 if client.get("api_key_env"):
                     env[client["api_key_env"]] = "synthetic"
             internal = {
