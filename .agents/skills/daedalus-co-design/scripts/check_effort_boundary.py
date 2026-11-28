@@ -18,12 +18,13 @@ import tempfile
 import threading
 import time
 import tomllib
+from copy import deepcopy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from route_source import compose_routes
+from route_source import compose_routes, dump_routes
 
 PLAN = '{"type":"clarify","message":"Which lights?"}'
 # The gateway's own upstream retry default when a client sets no max_retries.
@@ -206,8 +207,7 @@ def tool_results(payload):
 
 
 def check(agent_binary, gateway_binary, routes_path):
-    source = compose_routes(routes_path)
-    config = tomllib.loads(source)
+    config = tomllib.loads(compose_routes(routes_path))
     classifier = config["routes"]["stage"]["classifier"]
     task_routing = classifier["classify_trigger"] == "user_turn"
     replies = {"openai_chat": chat_reply, "openai_responses": responses_reply}
@@ -303,20 +303,18 @@ def check(agent_binary, gateway_binary, routes_path):
         ) as directory:
             directory = Path(directory)
             base = f"http://127.0.0.1:{peer.server_port}/v1"
-            for client in config["llm_clients"].values():
-                source = source.replace(client["base_url"], base)
-            source = source.replace(
-                config["routes"]["stage"]["classifier"]["base_url"], base
-            )
-            source = re.sub(r"(?m)^extra_headers = .*\n", "", source)
-            source = source.replace('model = "auto"', 'model = "fixture-judge"')
-            source = source.replace(
-                'max_input_tokens = "auto"', "max_input_tokens = 16384"
-            )
-            source = source.replace("truncate_input = true", "truncate_input = false")
-            source = source.replace("timeout_ms = 2000", "timeout_ms = 100")
+            fixture = deepcopy(config)
+            for client in fixture["llm_clients"].values():
+                client["base_url"] = base
+                client.pop("extra_headers", None)
+            judge = fixture["routes"]["stage"]["classifier"]
+            judge.update(base_url=base, truncate_input=False, timeout_ms=100)
+            if judge["model"] == "auto":
+                judge["model"] = "fixture-judge"
+            if judge.get("max_input_tokens") == "auto":
+                judge["max_input_tokens"] = 16384
             routes = directory / "routes.toml"
-            routes.write_text(source)
+            routes.write_text(dump_routes(fixture))
             gateway_port, agent_port = port(), port()
             gateway_url, agent_url = (
                 f"http://127.0.0.1:{gateway_port}",

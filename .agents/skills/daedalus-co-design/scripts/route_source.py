@@ -11,6 +11,7 @@ _SPEC = importlib.util.spec_from_file_location(
 )
 _RENDERER = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_RENDERER)
+dump_routes = _RENDERER.dumps
 
 
 def compose_routes(path):

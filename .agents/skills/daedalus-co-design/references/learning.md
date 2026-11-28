@@ -1075,6 +1075,13 @@ reused its assigned target. For a similar incident, correlate each request with
 its score and fallback warning. An HTTP 200 and a selected target also occur
 when classification fails. [Classifier input limits](../../../../submodules/daedalus-switchyard/docs/decision-input-limits.md)
 
+The local `baselabs/bison-1` verification service advertised a 16,384-token
+context and reported zero output tokens. On November 28, Switchyard `48c5515`
+used the high fallback for a simple arithmetic request with Elephant's prompt
+fitter (`token_count_mismatch`). Sending the same question directly to the
+local scorer selected low. A 14,947-token decision took 39.3 seconds. When
+changing runtimes, check the prompt format and time a near-limit request.
+
 ## Q002: open findings and decisions
 
 From this run's read-only source reviews, with the cited settings re-read in
