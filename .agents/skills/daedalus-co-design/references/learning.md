@@ -1016,6 +1016,17 @@ service received the write once. An interactive chat held open across report
 failure received its full reply. Recheck the built charter fixture when changing
 tool disabling, completion budgets, Pydantic validation or worker error handling.
 
+On November 28, five more charter runs at `160e3220` exhausted repair after
+receiving the same summary diagnostic twice. Their 28 preceding tool calls
+finished successfully. The log omitted which summary limits the drafts violated.
+In a production fixture, fixing a line break while leaving four sentences
+exhausted the incumbent after two submissions. Agent `48aff5f9` reported each
+violated limit in a stable order and published the exact game and evidence on
+the third submission. The only tool available was the publisher. Both packaged
+preparation modes still stopped early on a repeated sentence violation with
+different wording. When a correction budget compares diagnostic strings, check
+both partial progress on one field and changed input with the same defect.
+
 ## L039 — Recover tool evidence when the model rejects a continuation for length
 
 On November 26, 2026, an agent run at `fbc69106` completed 23 tool calls before
@@ -1032,6 +1043,20 @@ finished with one sandbox execution and one lookup. Exercise archive failure,
 retriever availability, receipt identity and remaining retry budget when
 changing this path. The built [research check](../../../../submodules/daedalus-agent/builder/migration/research_check.py)
 covers both preparation modes.
+
+## L040 — Preserve Redis watches on idle charter polls
+
+On November 28, a watch on a 4.5 MB charter state was invalidated during an
+idle interval even though the state hash stayed the same. The worker at
+`160e3220` sent SET after every selection. In disposable Redis, ten polls wrote
+45,076,180 state bytes. At `48aff5f9` they wrote zero. The worker still issued
+EXEC on the watched state, config and lease. A racing pause forced selection to
+run again and lease transfer stopped the old owner. Two production intervals
+each showed a changing worker lease and an undisturbed state watch. When
+changing the poller or Redis client, exercise an empty watched transaction,
+first initialization and recovery that changes state without finding due work.
+The comparison covers state writes. Reading and encoding the state still costs
+work on every poll.
 
 ## Q002: open findings and decisions
 
